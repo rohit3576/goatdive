@@ -1,0 +1,31 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/terrain/mountain_level.gd" id="1_lvl"]
+[ext_resource type="Script" path="res://scripts/terrain/terrain_generator.gd" id="2_terr"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 1.2
+fog_enabled = true
+fog_density = 0.003
+
+[node name="MountainLevel" type="Node3D"]
+script = ExtResource("1_lvl")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 200, 100)
+directional_shadow/max_distance = 300.0
+shadow_enabled = true
+
+[node name="Terrain" type="StaticBody3D" parent="."]
+script = ExtResource("2_terr")

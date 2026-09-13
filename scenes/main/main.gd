@@ -1,9 +1,9 @@
 extends Node3D
-## Phase 1 bootstrap: mounts the test level and wires debug input.
-## No gameplay here — goat controller is Phase 2+.
+## Bootstrap: mounts the default level and wires pause/restart.
+## No gameplay here — goat controller owns movement.
 
 const SceneLoader := preload("res://scripts/game/scene_loader.gd")
-const TEST_LEVEL := "res://scenes/main/test_level.tscn"
+const LEVEL := "res://scenes/terrain/mountain_level.tscn"
 
 @onready var world: Node3D = $World
 
@@ -11,8 +11,8 @@ const TEST_LEVEL := "res://scenes/main/test_level.tscn"
 func _ready() -> void:
 	print("GoatDive %s — main scene ready" % Config.VERSION)
 	DisplayServer.window_set_title("GoatDive — %s" % Config.VERSION)
-	GameState.current_scene_path = TEST_LEVEL
-	SceneLoader.switch(world, TEST_LEVEL)
+	GameState.current_scene_path = LEVEL
+	SceneLoader.switch(world, LEVEL)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -23,4 +23,4 @@ func _unhandled_input(event: InputEvent) -> void:
 			else Input.MOUSE_MODE_CAPTURED
 		)
 	elif event.is_action_pressed("restart"):
-		print("[restart] wired (Phase 2)")
+		get_tree().reload_current_scene()

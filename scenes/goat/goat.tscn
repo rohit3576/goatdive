@@ -1,0 +1,44 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/goat_controller.gd" id="1_goat"]
+[ext_resource type="Script" path="res://scripts/player/head_camera.gd" id="2_head"]
+[ext_resource type="Script" path="res://scripts/player/horns.gd" id="3_horns"]
+
+[sub_resource type="CapsuleShape3D" id="capsule"]
+radius = 0.35
+height = 1.0
+
+[sub_resource type="BoxMesh" id="torso"]
+size = Vector3(0.9, 0.55, 0.45)
+
+[sub_resource type="BoxMesh" id="snout"]
+size = Vector3(0.28, 0.22, 0.3)
+
+[node name="Goat" type="CharacterBody3D"]
+script = ExtResource("1_goat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("capsule")
+
+[node name="Body" type="Node3D" parent="."]
+
+[node name="Torso" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0.05)
+mesh = SubResource("torso")
+
+[node name="Snout" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -0.42)
+mesh = SubResource("snout")
+
+[node name="Head" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, -0.2)
+script = ExtResource("2_head")
+
+[node name="Camera3D" type="Camera3D" parent="Head"]
+fov = 78.0
+near = 0.05
+
+[node name="Horns" type="Node3D" parent="Head/Camera3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, -0.45)
+script = ExtResource("3_horns")
