@@ -35,7 +35,7 @@ These are decided **now** because they're expensive to change later:
 |---|----------|--------|-----|
 | D1 | Renderer | **Compatibility** (WebGL 2) | Web export only supports Compatibility. Forward+ (Vulkan) does not run in browsers. Choosing anything else breaks the Vercel target. |
 | D2 | Language | **GDScript** (no C#) | C# (.NET) cannot export to web in Godot 4. GDScript is the only browser-safe choice. |
-| D3 | Godot version | Latest **4.x stable** | Web export templates + Compatibility renderer maturity. Pin the exact version once installed. |
+| D3 | Godot version | **4.7.2 stable** (pinned, `brew install --cask godot`) | Web export templates + Compatibility renderer maturity. |
 | D4 | Input abstraction | **Action names only** (never raw keys in gameplay code) | Same actions later get touch/gamepad bindings without touching gameplay code. |
 | D5 | Units | 1 unit = 1 meter; goat ≈ 0.9–1.2 m tall | Keeps physics numbers sane and asset scale consistent. |
 | D6 | Physics tick | Default 60 Hz | Stable for a 60 FPS browser target. Revisit only with evidence. |
