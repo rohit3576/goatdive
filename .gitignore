@@ -1,0 +1,13 @@
+# Godot 4
+.godot/
+*.translation
+export_credentials.cfg
+export_presets.cfg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tooling
+.gdignore-assets/
+.omo/
