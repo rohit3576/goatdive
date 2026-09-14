@@ -1,8 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/goat_controller.gd" id="1_goat"]
 [ext_resource type="Script" path="res://scripts/player/head_camera.gd" id="2_head"]
 [ext_resource type="Script" path="res://scripts/player/horns.gd" id="3_horns"]
+[ext_resource type="Script" path="res://scripts/utils/debug_overlay.gd" id="4_overlay"]
 
 [sub_resource type="CapsuleShape3D" id="capsule"]
 radius = 0.35
@@ -15,6 +16,7 @@ size = Vector3(0.9, 0.55, 0.45)
 size = Vector3(0.28, 0.22, 0.3)
 
 [node name="Goat" type="CharacterBody3D"]
+floor_max_angle = 0.9599
 script = ExtResource("1_goat")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
@@ -42,3 +44,6 @@ near = 0.05
 [node name="Horns" type="Node3D" parent="Head/Camera3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, -0.45)
 script = ExtResource("3_horns")
+
+[node name="DebugOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("4_overlay")

@@ -18,12 +18,21 @@ extends StaticBody3D
 const SPAWN_XZ := Vector2(0.0, -24.0)
 const SPAWN_FLAT_RADIUS := 26.0
 
+# Surface classification (Phase 3, decision D1/D2).
+enum Surface { ROCK, GRASS, SNOW, ICE }
+const SNOW_LINE := 92.0
+const ICE_MASK_THRESHOLD := 0.35
+
 var _heights := PackedFloat32Array()
 var _verts := 0  # grid + 1 samples per side
 var _mesh: ArrayMesh
+var _ice_mask := FastNoiseLite.new()
 
 
 func _ready() -> void:
+	_ice_mask.seed = seed_value + 13
+	_ice_mask.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	_ice_mask.frequency = 1.0 / 60.0
 	_build()
 
 
@@ -50,6 +59,30 @@ func downhill_dir(x: float, z: float) -> Vector3:
 	var dx := get_height_at(x - e, z) - get_height_at(x + e, z)
 	var dz := get_height_at(x, z - e) - get_height_at(x, z + e)
 	return Vector3(dx, 0.0, dz).normalized()
+
+
+## Surface type at world XZ — the one classifier shared by grip and vertex
+## colors, so what you see is what you slide on.
+func surface_at(x: float, z: float) -> int:
+	# Spawn disc: bare rock — full grip start, no snow/ice slides at spawn.
+	if _spawn_blend(x, z) < 1.0:
+		return Surface.ROCK
+	var h := get_height_at(x, z)
+	if h > SNOW_LINE:
+		if _ice_mask.get_noise_2d(x, z) > ICE_MASK_THRESHOLD:
+			return Surface.ICE
+		return Surface.SNOW
+	if h > 25.0 or slope_deg_at(x, z) > 30.0:
+		return Surface.ROCK
+	return Surface.GRASS
+
+
+## Terrain slope in degrees at world XZ (finite-difference gradient).
+func slope_deg_at(x: float, z: float) -> float:
+	var e := 2.0
+	var hx := get_height_at(x + e, z) - get_height_at(x - e, z)
+	var hz := get_height_at(x, z + e) - get_height_at(x, z - e)
+	return rad_to_deg(atan(sqrt(hx * hx + hz * hz) / (2.0 * e)))
 
 
 func _build() -> void:
@@ -112,9 +145,8 @@ func _make_mesh(half: float, step: float) -> void:
 		for ix in _verts:
 			var x := -half + ix * step
 			var z := -half + iz * step
-			var y := _heights[iz * _verts + ix]
-			st.set_color(_color_for_height(y))
-			st.add_vertex(Vector3(x, y, z))
+			st.set_color(_color_for_surface(surface_at(x, z)))
+			st.add_vertex(Vector3(x, _heights[iz * _verts + ix], z))
 
 	for iz in grid:
 		for ix in grid:
@@ -146,9 +178,13 @@ func _make_collision() -> void:
 	add_child(cs)
 
 
-func _color_for_height(y: float) -> Color:
-	if y > 92.0:
-		return Color(0.92, 0.94, 0.97)  # snow
-	if y > 25.0:
-		return Color(0.42, 0.40, 0.38)  # rock
-	return Color(0.30, 0.45, 0.25)  # grass
+func _color_for_surface(surf: int) -> Color:
+	match surf:
+		Surface.ICE:
+			return Color(0.72, 0.84, 0.95)
+		Surface.SNOW:
+			return Color(0.92, 0.94, 0.97)
+		Surface.ROCK:
+			return Color(0.42, 0.40, 0.38)
+		_:
+			return Color(0.30, 0.45, 0.25)
