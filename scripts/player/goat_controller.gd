@@ -21,6 +21,13 @@ var _floor_slope_deg := 0.0
 var _in_slide := false
 var _surface_name := "?"
 
+# World vertical speed from position deltas — velocity.y reads ≈ 0 while
+# floor-sliding (move_and_slide decomposes it), and Phase 4's fall-drift
+# camera needs the real number (plan Step 1, quirk carried from Phase 3).
+var _last_y := 0.0
+var _vy_world := 0.0
+var _floor_n := Vector3.UP
+
 var _terrain: TerrainGenerator
 
 
@@ -36,7 +43,8 @@ func set_horizontal_velocity(v: Vector2) -> void:
 	velocity.z = v.y
 
 
-## Live readout for the F3 debug overlay (Phase 3, decision D9).
+## Live readout for the F3 debug overlay and the Phase 4 camera FX (D3: one
+## snapshot, two consumers — no spaghetti member access).
 func get_debug_state() -> Dictionary:
 	return {
 		"speed": Vector2(velocity.x, velocity.z).length(),
@@ -46,10 +54,15 @@ func get_debug_state() -> Dictionary:
 		"vy": velocity.y,
 		"coyote": _since_floor,
 		"buffer": _jump_buffer,
+		"vy_world": _vy_world,
+		"floor_n": _floor_n,
+		"vel": Vector2(velocity.x, velocity.z),
+		"grounded": is_on_floor(),
 	}
 
 
 func _ready() -> void:
+	_last_y = global_position.y
 	if get_parent() != null:
 		_terrain = get_parent().get_node_or_null("Terrain") as TerrainGenerator
 
@@ -67,12 +80,14 @@ func _physics_process(delta: float) -> void:
 	var floor_n := Vector3.UP
 	if on_floor:
 		floor_n = get_floor_normal()
+		_floor_n = floor_n
 		_floor_slope_deg = rad_to_deg(acos(clampf(floor_n.y, -1.0, 1.0)))
 		_in_slide = _floor_slope_deg >= Config.SLIDE_ANGLE_DEG
 		grip = _grip_at_feet()
 	else:
 		_in_slide = false
 		_floor_slope_deg = 0.0
+		_floor_n = Vector3.UP
 
 	if not on_floor:
 		velocity += Vector3.DOWN * Config.GRAVITY * delta
@@ -128,9 +143,11 @@ func _physics_process(delta: float) -> void:
 		velocity.y = Config.JUMP_VELOCITY
 		_jump_buffer = 0.0
 		_since_floor = Config.JUMP_COYOTE + 1.0  # consume — no double jump
+		EventBus.goat_jumped.emit()
 
 	var was_on_floor := on_floor
 	var pre_vy := velocity.y
+	var pre_vel := velocity  # speed into walls for the bonk check
 	move_and_slide()
 
 	# Landing transition: measure impact, tell the world, maybe stumble.
@@ -139,6 +156,29 @@ func _physics_process(delta: float) -> void:
 		EventBus.goat_landed.emit(impact)
 		if impact > Config.STUMBLE_IMPACT:
 			_stumble = Config.STUMBLE_TIME
+
+	# Wall bonk: near-horizontal collision normal + enough speed into it
+	# (steep-but-climbable faces are floors via floor_max_angle, not bonks).
+	for i in get_slide_collision_count():
+		var n := get_slide_collision(i).get_normal()
+		if absf(n.y) < 0.35:
+			var bonk := maxf(0.0, -pre_vel.dot(n))
+			if bonk > Config.BONK_MIN_SPEED:
+				EventBus.goat_bonked.emit(bonk)
+			break
+
+	# World vertical speed from position delta (clamped: teleport spikes are
+	# not physics). Must run before the respawn teleport resets _last_y.
+	var y_now := global_position.y
+	_vy_world = clampf((y_now - _last_y) / delta, -80.0, 80.0)
+	_last_y = y_now
+
+	if _spawn_set and global_position.y < Config.KILL_Y:
+		global_transform = _spawn_transform
+		velocity = Vector3.ZERO
+		_horiz = Vector2.ZERO
+		_last_y = global_position.y
+		_vy_world = 0.0
 
 	if _spawn_set and global_position.y < Config.KILL_Y:
 		global_transform = _spawn_transform
