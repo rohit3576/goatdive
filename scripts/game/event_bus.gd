@@ -4,6 +4,7 @@ extends Node
 
 signal race_started
 signal race_finished(final_time: float)
+signal checkpoint_passed(idx: int, split: float)
 signal goat_landed(impact_speed: float)
 signal goat_jumped
 signal goat_bonked(impact_speed: float, direction: Vector3)

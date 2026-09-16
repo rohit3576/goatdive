@@ -48,6 +48,10 @@ var _time := 0.0
 # Directional bonk kick (Phase 5): decaying positional push, stored local.
 var _kick := Vector3.ZERO
 
+# Gate-pass FOV pop (Phase 6, plan Step 5): quick widen, ~0.3 s decay —
+# a checkpoint reads "noted", not "exploded".
+var _fov_pop := 0.0
+
 
 func _ready() -> void:
 	# Camera3D → Head → Goat rig (goat.tscn). FOV_BASE lives HERE only —
@@ -58,6 +62,7 @@ func _ready() -> void:
 	EventBus.goat_jumped.connect(_on_jumped)
 	EventBus.goat_landed.connect(_on_landed)
 	EventBus.goat_bonked.connect(_on_bonked)
+	EventBus.checkpoint_passed.connect(_on_gate_passed)
 
 
 func _process(delta: float) -> void:
@@ -65,6 +70,7 @@ func _process(delta: float) -> void:
 		position = Vector3.ZERO
 		rotation = Vector3.ZERO
 		fov = Config.FOV_BASE
+		_fov_pop = 0.0
 		return
 
 	var dt := minf(delta, 0.05)  # clamp — window-drag spikes must not explode springs
@@ -163,7 +169,8 @@ func _process(delta: float) -> void:
 		Config.FOV_MAX,
 		smoothstep(Config.MOVE_SPEED, Config.MAX_DOWNHILL_SPEED, speed)
 	)
-	fov = lerpf(fov, fov_target, minf(1.0, Config.FOV_LERP * dt))
+	_fov_pop = move_toward(_fov_pop, 0.0, Config.RACE_GATE_PASS_FOV_POP * 3.0 * dt)
+	fov = lerpf(fov, fov_target + _fov_pop, minf(1.0, Config.FOV_LERP * dt))
 
 	# --- Compose (single write point, D4). ---
 	position = Vector3(
@@ -198,6 +205,12 @@ func _on_bonked(impact: float, direction: Vector3) -> void:
 		# regardless of view heading.
 		var world_kick := direction.normalized() * clampf(impact * 0.008, 0.04, 0.12)
 		_kick = global_transform.basis.orthonormalized().inverse() * world_kick
+
+
+func _on_gate_passed(_idx: int, _split: float) -> void:
+	if not Config.CAM_FX:
+		return
+	_fov_pop += Config.RACE_GATE_PASS_FOV_POP
 
 
 func _add_trauma(impact: float) -> void:

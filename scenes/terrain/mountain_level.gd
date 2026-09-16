@@ -18,3 +18,9 @@ func _ready() -> void:
 	goat.global_position = spawn
 	goat.look_at(spawn + terrain.downhill_dir(x, z))
 	goat.setup_spawn(goat.global_transform)
+
+	# Phase 6: the race owns countdown/timer/gates — wired here because the
+	# goat doesn't exist during the manager's own _ready (children first).
+	var race := get_node_or_null("RaceManager") as RaceManager
+	if race != null:
+		race.begin(goat)

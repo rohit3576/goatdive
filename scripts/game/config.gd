@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.5.0-phase5"
+const VERSION := "0.6.0-phase6"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -86,6 +86,17 @@ const TUMBLE_SPIN_MAX := 12.0  # rad/s
 const TUMBLE_SPIN_FRICTION := 6.0  # rad/s lost per s while grounded
 const TUMBLE_RECOVER_SMOOTH := 10.0  # 1/s upright alignment
 const TUMBLE_RECOVER_SPEED := 2.0  # m/s — below this, recovery may start
+
+# Phase 6 — race system (plan: docs/plans/phase-6-race-system.md).
+const RACE_COUNTDOWN := 3.0
+const RACE_GATE_COUNT_MAX := 12
+const RACE_GATE_SPACING := 70.0  # m of horizontal travel between gates
+const RACE_GATE_WIDTH := 10.0
+const RACE_GATE_AVOID_PINE_R := 4.0  # gates nudge away from pine records
+const RACE_FINISH_ALT := 12.0  # valley altitude where the walk ends
+const RACE_PLAYABLE_RADIUS := 440.0  # inside the distant-peak ring
+const RACE_WRONG_WAY_TIME := 2.0  # s of backtracking before the flash
+const RACE_GATE_PASS_FOV_POP := 2.0  # deg — a pass reads "noted", not "exploded"
 
 # Horns (POV framing).
 const HORN_LENGTH := 0.35

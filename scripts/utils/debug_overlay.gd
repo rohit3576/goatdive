@@ -5,11 +5,13 @@ extends CanvasLayer
 var _label: Label
 var _goat: GoatController
 var _fx: CameraFx
+var _race: RaceManager
 
 
 func _ready() -> void:
 	_goat = get_parent() as GoatController
 	_fx = _goat.get_node_or_null("Head/Camera3D") as CameraFx
+	_race = get_tree().get_first_node_in_group("race_manager") as RaceManager
 	_label = Label.new()
 	_label.position = Vector2(12.0, 12.0)
 	_label.add_theme_font_size_override("font_size", 16)
@@ -34,6 +36,12 @@ func _process(_delta: float) -> void:
 	if _fx != null:
 		var f := _fx.get_fx_debug()
 		fx_line = "\nfx fov %.1f  trauma %.2f  dip %.3f" % [f.fov, f.trauma, f.dip]
-	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s" % [
-		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line,
+	var race_line := ""
+	if _race != null:
+		var r := _race.get_race_state()
+		race_line = "\nrace %s  gate %d/%d  %.0f m  respawn G%d" % [
+			r.state, r.gates_passed, r.gate_count, r.dist_to_finish, r.gates_passed,
+		]
+	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s" % [
+		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, race_line,
 	]

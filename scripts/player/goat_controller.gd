@@ -12,6 +12,10 @@ extends CharacterBody3D
 var _spawn_transform := Transform3D()
 var _spawn_set := false
 
+# Phase 6 countdown lock (plan D3): zero input authority — physics keeps
+# simulating (the goat settles on spawn); movement math untouched.
+var _input_enabled := true
+
 # Movement state.
 var _horiz := Vector2.ZERO
 var _since_floor := 99.0
@@ -43,6 +47,11 @@ var _terrain: TerrainGenerator
 func setup_spawn(t: Transform3D) -> void:
 	_spawn_transform = t
 	_spawn_set = true
+
+
+## Countdown lock (Phase 6 D3): false = no move/jump input read at all.
+func set_input_enabled(on: bool) -> void:
+	_input_enabled = on
 
 
 ## Test/utility hook: set horizontal velocity directly (knockbacks, smoke tests).
@@ -82,7 +91,7 @@ func _physics_process(delta: float) -> void:
 	_since_floor = 0.0 if on_floor else _since_floor + delta
 	_jump_buffer = maxf(0.0, _jump_buffer - delta)
 	_stumble = maxf(0.0, _stumble - delta)
-	if Input.is_action_just_pressed("jump"):
+	if _input_enabled and Input.is_action_just_pressed("jump"):
 		_jump_buffer = Config.JUMP_BUFFER
 
 	# Surface + slope (only meaningful when grounded).
@@ -103,7 +112,9 @@ func _physics_process(delta: float) -> void:
 		velocity += Vector3.DOWN * Config.GRAVITY * delta
 
 	# Camera-relative wish direction (goat yaws with the camera).
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var input := Vector2.ZERO
+	if _input_enabled:
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var tb := global_transform.basis
 	var wish := tb.x * input.x + (-tb.z) * -input.y
 	wish.y = 0.0
