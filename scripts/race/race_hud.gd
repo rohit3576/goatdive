@@ -11,12 +11,14 @@ var _count: Label
 var _wrong: Label
 var _panel: PanelContainer
 var _res_title: Label
+var _res_rows: VBoxContainer
 var _res_detail: Label
 var _res_hint: Label
 
 var _last_tick := -1
 var _go_until := 0.0
 var _results_shown := false
+var _next_refresh := 0
 
 
 func _ready() -> void:
@@ -49,10 +51,13 @@ func _build() -> void:
 	col.add_theme_constant_override("separation", 8)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	_res_title = _make_label(40, Color(1.0, 0.85, 0.3), Control.PRESET_TOP_LEFT)
+	_res_rows = VBoxContainer.new()
+	_res_rows.add_theme_constant_override("separation", 2)
 	_res_detail = _make_label(20, Color.WHITE, Control.PRESET_TOP_LEFT)
 	_res_hint = _make_label(16, Color(0.7, 0.7, 0.7), Control.PRESET_TOP_LEFT)
 	_res_hint.text = "R — race again"
 	col.add_child(_res_title)
+	col.add_child(_res_rows)
 	col.add_child(_res_detail)
 	col.add_child(_res_hint)
 	margin.add_child(col)
@@ -101,8 +106,10 @@ func _process(_delta: float) -> void:
 			% [r.best_split_str, r.top_speed, r.crashes]
 		)
 		_panel.visible = true
-	elif not r.finished and _results_shown:
-		_results_shown = false  # can't happen (R reloads) — cheap insurance
+		_refresh_rows(r)
+	elif r.finished and Time.get_ticks_msec() >= _next_refresh:
+		_next_refresh = Time.get_ticks_msec() + 500  # AI trickle in post-finish
+		_refresh_rows(r)
 
 
 func _pop_count(text: String) -> void:
@@ -117,6 +124,19 @@ func _pop_count(text: String) -> void:
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_OUT)
 	tw.tween_property(_count, "modulate:a", 1.0, 0.18)
+
+
+func _refresh_rows(r: Dictionary) -> void:
+	for child in _res_rows.get_children():
+		child.queue_free()
+	for s in r.standings:
+		var row := _make_label(
+			22,
+			Color(1.0, 0.85, 0.3) if s.is_player else Color.WHITE,
+			Control.PRESET_TOP_LEFT
+		)
+		row.text = "%d. %s  %s" % [s.pos, s.name, s.time_str]
+		_res_rows.add_child(row)
 
 
 func _make_label(size: int, col: Color, preset: int) -> Label:

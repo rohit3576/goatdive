@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.6.0-phase6"
+const VERSION := "0.7.0-phase7"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -97,6 +97,28 @@ const RACE_FINISH_ALT := 12.0  # valley altitude where the walk ends
 const RACE_PLAYABLE_RADIUS := 440.0  # inside the distant-peak ring
 const RACE_WRONG_WAY_TIME := 2.0  # s of backtracking before the flash
 const RACE_GATE_PASS_FOV_POP := 2.0  # deg — a pass reads "noted", not "exploded"
+
+# Phase 7 — AI goats (plan: docs/plans/phase-7-ai-goats.md D4/D5/D6).
+# Skill profiles: speed cap (m/s, lift-off point), lookahead (m), ledge
+# drop that triggers a jump (m — eagerness: lower = jumps more).
+const AI_TURN_RATE := 2.5  # rad/s body yaw — matches player TURN_RATE
+const AI_WISH_SMOOTH := 8.0  # 1/s steering smoothing (anti-zigzag)
+const AI_LEDGE_PROBE := 5.0  # m ahead for the near-edge drop probe
+const AI_STUCK_TIME := 4.0  # s below AI_STUCK_SPEED before the teleport
+const AI_STUCK_SPEED := 1.0
+const AI_GATE_STALL := 12.0  # s without passing a gate before the rescue
+const AI_SPEED_CAUTIOUS := 15.0
+const AI_SPEED_BOLD := 18.0
+const AI_SPEED_RECKLESS := 20.0
+const AI_LOOK_CAUTIOUS := 12.0
+const AI_LOOK_BOLD := 16.0
+const AI_LOOK_RECKLESS := 20.0
+const AI_LEDGE_CAUTIOUS := 10.0
+const AI_LEDGE_BOLD := 7.0
+const AI_LEDGE_RECKLESS := 5.0
+const AI_COLOR_CAUTIOUS := Color(0.45, 0.60, 0.35)  # sage
+const AI_COLOR_BOLD := Color(0.75, 0.40, 0.20)  # rust
+const AI_COLOR_RECKLESS := Color(0.40, 0.22, 0.22)  # charcoal-red
 
 # Horns (POV framing).
 const HORN_LENGTH := 0.35

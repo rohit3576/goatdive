@@ -16,6 +16,13 @@ var _spawn_set := false
 # simulating (the goat settles on spawn); movement math untouched.
 var _input_enabled := true
 
+# Phase 7 autopilot (plan D2): AI drives the SAME verified body — wish
+# comes from a brain instead of the Input singleton. Physics (grip,
+# slide, stumble, tumble, coyote) is shared, never duplicated.
+var _autopilot := false
+var _ai_wish := Vector2.ZERO
+var _ai_jump := false
+
 # Movement state.
 var _horiz := Vector2.ZERO
 var _since_floor := 99.0
@@ -54,6 +61,18 @@ func set_input_enabled(on: bool) -> void:
 	_input_enabled = on
 
 
+## Autopilot (Phase 7 D2): the brain calls this every physics tick with
+## goat-local input (input.y = -1 is forward, like pressing W). Physics
+## stays the only integrator — the brain never touches velocity.
+func set_autopilot(on: bool) -> void:
+	_autopilot = on
+
+
+func set_ai_steering(wish: Vector2, want_jump: bool) -> void:
+	_ai_wish = wish
+	_ai_jump = want_jump
+
+
 ## Test/utility hook: set horizontal velocity directly (knockbacks, smoke tests).
 func set_horizontal_velocity(v: Vector2) -> void:
 	_horiz = v
@@ -77,6 +96,7 @@ func get_debug_state() -> Dictionary:
 		"vel": Vector2(velocity.x, velocity.z),
 		"grounded": is_on_floor(),
 		"tumbling": _tumbling,
+		"ai": _autopilot,
 	}
 
 
@@ -91,8 +111,12 @@ func _physics_process(delta: float) -> void:
 	_since_floor = 0.0 if on_floor else _since_floor + delta
 	_jump_buffer = maxf(0.0, _jump_buffer - delta)
 	_stumble = maxf(0.0, _stumble - delta)
-	if _input_enabled and Input.is_action_just_pressed("jump"):
-		_jump_buffer = Config.JUMP_BUFFER
+	if _input_enabled:
+		if _autopilot:
+			if _ai_jump:
+				_jump_buffer = Config.JUMP_BUFFER
+		elif Input.is_action_just_pressed("jump"):
+			_jump_buffer = Config.JUMP_BUFFER
 
 	# Surface + slope (only meaningful when grounded).
 	var grip := 1.0
@@ -114,7 +138,9 @@ func _physics_process(delta: float) -> void:
 	# Camera-relative wish direction (goat yaws with the camera).
 	var input := Vector2.ZERO
 	if _input_enabled:
-		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		input = _ai_wish if _autopilot else Input.get_vector(
+			"move_left", "move_right", "move_forward", "move_back"
+		)
 	var tb := global_transform.basis
 	var wish := tb.x * input.x + (-tb.z) * -input.y
 	wish.y = 0.0

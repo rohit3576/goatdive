@@ -42,6 +42,10 @@ func _process(_delta: float) -> void:
 		race_line = "\nrace %s  gate %d/%d  %.0f m  respawn G%d" % [
 			r.state, r.gates_passed, r.gate_count, r.dist_to_finish, r.gates_passed,
 		]
+		for ai in r.ai_states:
+			race_line += "\nai %s  gate %s  stuck %.1f  tp %d" % [
+				ai.profile, ai.gate, ai.stuck, ai.teleports,
+			]
 	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s" % [
 		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, race_line,
 	]

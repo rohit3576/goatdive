@@ -207,8 +207,10 @@ func _on_bonked(impact: float, direction: Vector3) -> void:
 		_kick = global_transform.basis.orthonormalized().inverse() * world_kick
 
 
-func _on_gate_passed(_idx: int, _split: float) -> void:
+func _on_gate_passed(_idx: int, _split: float, racer: String) -> void:
 	if not Config.CAM_FX:
+		return
+	if racer != "YOU":  # the player's passes only — AI gates stay silent
 		return
 	_fov_pop += Config.RACE_GATE_PASS_FOV_POP
 

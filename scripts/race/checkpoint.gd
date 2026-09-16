@@ -12,7 +12,13 @@ signal body_entered_gate(body: Node3D)
 
 const POST_HEIGHT := 4.0
 const TRIGGER_HEIGHT := 8.0  # jump-over-able at racing speed (D2)
-const TRIGGER_DEPTH := 3.0  # ≥ 1 m anti-tunnel at 20 m/s / 60 Hz
+# Capture volume = racing-style crossing SLAB, not a needle's eye: the
+# posts stay 10 m apart visually, but the trigger is wide and deep so a
+# goat crossing the gate line at 20 m/s on a sloppy line still counts.
+# (Phase 7 lesson: 3 m deep × 14 m wide box = 0/7 gate passes for four
+# goats running the whole course — nobody could ever finish.)
+const TRIGGER_DEPTH := 25.0
+const TRIGGER_SIDE_MARGIN := 14.0
 
 var idx := 0
 var is_finish := false
@@ -40,14 +46,19 @@ func forward() -> Vector3:
 	return _forward
 
 
+## Visual state only (Phase 7: arming is separate — with four racers at
+## different gates, every gate must monitor during RACING; the MANAGER
+## owns order via per-racer gate indices).
 func set_state(s: State) -> void:
 	if _mesh_inst != null:
 		_mesh_inst.material_override = _mat_for(s)
+
+
+## Collision arming (monitoring), deferred — flips arrive inside
+## body_entered callbacks where the physics server blocks direct writes.
+func set_armed(armed: bool) -> void:
 	if _area != null:
-		# Only the current gate monitors — order is enforced physically.
-		# Deferred: state flips arrive inside body_entered callbacks, where
-		# direct monitoring writes are blocked by the physics server.
-		_area.set_deferred("monitoring", s == State.NEXT)
+		_area.set_deferred("monitoring", armed)
 
 
 func _build_mesh(width: float) -> void:
@@ -77,9 +88,10 @@ func _build_mesh(width: float) -> void:
 
 func _build_trigger(width: float) -> void:
 	var area := Area3D.new()
+	area.monitoring = false  # disarmed at birth — the manager arms at GO
 	var box := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(width + 4.0, TRIGGER_HEIGHT, TRIGGER_DEPTH)
+	shape.size = Vector3(width + TRIGGER_SIDE_MARGIN, TRIGGER_HEIGHT, TRIGGER_DEPTH)
 	box.shape = shape
 	area.add_child(box)
 	area.position = Vector3(0.0, TRIGGER_HEIGHT * 0.5, 0.0)
