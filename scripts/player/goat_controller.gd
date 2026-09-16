@@ -28,6 +28,15 @@ var _last_y := 0.0
 var _vy_world := 0.0
 var _floor_n := Vector3.UP
 
+# Crash tumble (Phase 5 D6, ragdoll-lite): the capsule transform stays
+# upright — only the visible Body node spins. Recovery realigns it and
+# hands off to the verified STUMBLE beat.
+var _tumbling := false
+var _tumble_axis := Vector3.RIGHT
+var _tumble_spin := 0.0
+
+@onready var _body := $Body as Node3D
+
 var _terrain: TerrainGenerator
 
 
@@ -58,6 +67,7 @@ func get_debug_state() -> Dictionary:
 		"floor_n": _floor_n,
 		"vel": Vector2(velocity.x, velocity.z),
 		"grounded": is_on_floor(),
+		"tumbling": _tumbling,
 	}
 
 
@@ -101,9 +111,10 @@ func _physics_process(delta: float) -> void:
 	var has_input := wish2.length_squared() > 0.0001
 
 	if on_floor:
-		# Input authority: full normally, reduced in slide, zero while stumbling.
+		# Input authority: full normally, reduced in slide, zero while
+		# stumbling or tumbling.
 		var authority := 1.0
-		if _stumble > 0.0:
+		if _stumble > 0.0 or _tumbling:
 			authority = 0.0
 		elif _in_slide:
 			authority = 0.3
@@ -129,7 +140,7 @@ func _physics_process(delta: float) -> void:
 			var g_dir := Vector3.DOWN - floor_n * Vector3.DOWN.dot(floor_n)
 			_horiz += Vector2(g_dir.x, g_dir.z) * Config.GRAVITY * delta
 	else:
-		if has_input and _stumble <= 0.0:
+		if has_input and _stumble <= 0.0 and not _tumbling:
 			_horiz += wish2.normalized() * (Config.MOVE_ACCEL * Config.AIR_CONTROL * delta)
 
 	var hs := _horiz.length()
@@ -138,8 +149,13 @@ func _physics_process(delta: float) -> void:
 	velocity.x = _horiz.x
 	velocity.z = _horiz.y
 
-	# Jump: buffered + coyote, consumed on use.
-	if _jump_buffer > 0.0 and _since_floor <= Config.JUMP_COYOTE and _stumble <= 0.0:
+	# Jump: buffered + coyote, consumed on use. No jumping out of a tumble.
+	if (
+		_jump_buffer > 0.0
+		and _since_floor <= Config.JUMP_COYOTE
+		and _stumble <= 0.0
+		and not _tumbling
+	):
 		velocity.y = Config.JUMP_VELOCITY
 		_jump_buffer = 0.0
 		_since_floor = Config.JUMP_COYOTE + 1.0  # consume — no double jump
@@ -159,13 +175,20 @@ func _physics_process(delta: float) -> void:
 
 	# Wall bonk: near-horizontal collision normal + enough speed into it
 	# (steep-but-climbable faces are floors via floor_max_angle, not bonks).
+	# Mid-air hits above the tumble threshold crash the goat (Phase 5 D6).
 	for i in get_slide_collision_count():
 		var n := get_slide_collision(i).get_normal()
 		if absf(n.y) < 0.35:
 			var bonk := maxf(0.0, -pre_vel.dot(n))
 			if bonk > Config.BONK_MIN_SPEED:
-				EventBus.goat_bonked.emit(bonk)
+				var dir := n
+				dir.y = 0.0
+				EventBus.goat_bonked.emit(bonk, dir)
+				if not was_on_floor and bonk > Config.TUMBLE_MIN_IMPACT:
+					_enter_tumble(bonk, dir)
 			break
+
+	_update_tumble(delta)
 
 	# World vertical speed from position delta (clamped: teleport spikes are
 	# not physics). Must run before the respawn teleport resets _last_y.
@@ -177,8 +200,43 @@ func _physics_process(delta: float) -> void:
 		global_transform = _spawn_transform
 		velocity = Vector3.ZERO
 		_horiz = Vector2.ZERO
+		_tumbling = false
+		_tumble_spin = 0.0
+		_body.quaternion = Quaternion.IDENTITY
 		_last_y = global_position.y
 		_vy_world = 0.0
+
+
+## Crash tumble (Phase 5 D6): spin the visible Body around the axis the
+## impact implies; the capsule stays upright so move_and_slide stays sane.
+## Also the smoke-test entry point for forced tumbles.
+func _enter_tumble(impact: float, dir: Vector3) -> void:
+	_tumbling = true
+	if dir.length_squared() < 0.001:
+		dir = Vector3.BACK
+	_tumble_axis = dir.normalized().cross(Vector3.UP).normalized()
+	_tumble_spin = clampf(impact * Config.TUMBLE_SPIN_GAIN, 3.0, Config.TUMBLE_SPIN_MAX)
+
+
+func _update_tumble(delta: float) -> void:
+	if not _tumbling:
+		return
+	if is_on_floor():
+		# Skidding on the ground bleeds spin; once slow AND nearly stopped,
+		# realign upright and hand off to the verified STUMBLE beat.
+		_tumble_spin = move_toward(_tumble_spin, 0.0, Config.TUMBLE_SPIN_FRICTION * delta)
+		if _horiz.length() < Config.TUMBLE_RECOVER_SPEED:
+			var q := _body.quaternion.slerp(
+				Quaternion.IDENTITY, minf(1.0, Config.TUMBLE_RECOVER_SMOOTH * delta)
+			)
+			_body.quaternion = q
+			if _body.quaternion.angle_to(Quaternion.IDENTITY) < 0.05:
+				_body.quaternion = Quaternion.IDENTITY
+				_tumbling = false
+				_tumble_spin = 0.0
+				_stumble = Config.STUMBLE_TIME
+			return
+	_body.global_rotate(_tumble_axis, _tumble_spin * delta)
 
 	if _spawn_set and global_position.y < Config.KILL_Y:
 		global_transform = _spawn_transform
@@ -206,6 +264,8 @@ func _grip_at_feet() -> float:
 
 
 func _state_name() -> String:
+	if _tumbling:
+		return "TUMBLE"
 	if _stumble > 0.0:
 		return "STUMBLE"
 	if not is_on_floor():

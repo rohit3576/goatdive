@@ -1,7 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scenes/terrain/mountain_level.gd" id="1_lvl"]
 [ext_resource type="Script" path="res://scripts/terrain/terrain_generator.gd" id="2_terr"]
+[ext_resource type="Script" path="res://scripts/terrain/vegetation.gd" id="3_veg"]
+[ext_resource type="Script" path="res://scripts/terrain/atmosphere.gd" id="4_atm"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -29,3 +31,9 @@ shadow_enabled = true
 
 [node name="Terrain" type="StaticBody3D" parent="."]
 script = ExtResource("2_terr")
+
+[node name="Vegetation" type="Node3D" parent="."]
+script = ExtResource("3_veg")
+
+[node name="Atmosphere" type="Node3D" parent="."]
+script = ExtResource("4_atm")

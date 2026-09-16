@@ -45,9 +45,15 @@ var _fall_amt := 0.0
 var _trauma := 0.0
 var _time := 0.0
 
+# Directional bonk kick (Phase 5): decaying positional push, stored local.
+var _kick := Vector3.ZERO
+
 
 func _ready() -> void:
-	# Camera3D → Head → Goat rig (goat.tscn).
+	# Camera3D → Head → Goat rig (goat.tscn). FOV_BASE lives HERE only —
+	# the scene's initial fov was removed so Config is the single source
+	# (Phase 5 D10 tidy).
+	fov = Config.FOV_BASE
 	_goat = get_parent().get_parent() as GoatController
 	EventBus.goat_jumped.connect(_on_jumped)
 	EventBus.goat_landed.connect(_on_landed)
@@ -148,6 +154,9 @@ func _process(delta: float) -> void:
 	var shake_x := sin(_time * Config.SHAKE_FREQ * TAU * 0.52 + 2.4) * Config.SHAKE_POS * sh
 	var shake_y := sin(_time * Config.SHAKE_FREQ * TAU * 0.4 + 0.8) * Config.SHAKE_POS * sh
 
+	# --- Directional bonk kick (Phase 5): decay toward zero. ---
+	_kick = _kick.lerp(Vector3.ZERO, minf(1.0, 8.0 * dt))
+
 	# --- FOV kick (D10): eased toward the speed target, never pops. ---
 	var fov_target := lerpf(
 		Config.FOV_BASE,
@@ -157,7 +166,9 @@ func _process(delta: float) -> void:
 	fov = lerpf(fov, fov_target, minf(1.0, Config.FOV_LERP * dt))
 
 	# --- Compose (single write point, D4). ---
-	position = Vector3(bob_x + shake_x, bob_y + _dip_x + shake_y, 0.0)
+	position = Vector3(
+		bob_x + shake_x + _kick.x, bob_y + _dip_x + shake_y + _kick.y, _kick.z
+	)
 	rotation = Vector3(tilt_pitch + _pitch_x + fall_pitch + shake_pitch, 0.0, tilt_roll + lean + shake_roll)
 
 
@@ -178,10 +189,15 @@ func _on_landed(impact: float) -> void:
 		_add_trauma(impact)
 
 
-func _on_bonked(impact: float) -> void:
+func _on_bonked(impact: float, direction: Vector3) -> void:
 	if not Config.CAM_FX:
 		return
 	_add_trauma(impact)
+	if direction.length_squared() > 0.001:
+		# World push → local offset, so the kick reads "away from the wall"
+		# regardless of view heading.
+		var world_kick := direction.normalized() * clampf(impact * 0.008, 0.04, 0.12)
+		_kick = global_transform.basis.orthonormalized().inverse() * world_kick
 
 
 func _add_trauma(impact: float) -> void:

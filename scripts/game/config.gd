@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.4.0-phase4"
+const VERSION := "0.5.0-phase5"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -72,6 +72,20 @@ const SHAKE_DECAY := 1.6  # trauma per second
 const SHAKE_FREQ := 25.0  # Hz base (rotational; positional runs slower)
 const SHAKE_POS := 0.1  # m at full trauma²
 const SHAKE_ROT_DEG := 2.0  # degrees at full trauma²
+
+# Phase 5 — vegetation caps (plan D4, web perf D9).
+const VEG_PINES := 800
+const VEG_ROCKS := 400
+const VEG_TUFTS := 3000
+
+# Phase 5 — crash tumble, ragdoll-lite (plan D6). The capsule transform
+# stays upright; only the visible Body node spins (physics stays sane).
+const TUMBLE_MIN_IMPACT := 10.0  # m/s wall hit while airborne
+const TUMBLE_SPIN_GAIN := 0.8  # rad/s of spin per m/s of impact
+const TUMBLE_SPIN_MAX := 12.0  # rad/s
+const TUMBLE_SPIN_FRICTION := 6.0  # rad/s lost per s while grounded
+const TUMBLE_RECOVER_SMOOTH := 10.0  # 1/s upright alignment
+const TUMBLE_RECOVER_SPEED := 2.0  # m/s — below this, recovery may start
 
 # Horns (POV framing).
 const HORN_LENGTH := 0.35

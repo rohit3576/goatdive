@@ -1,38 +1,59 @@
 class_name TerrainGenerator
 extends StaticBody3D
-## Procedural mountain terrain (Phase 2, decision D1/D2/D8).
+## Procedural alpine terrain (Phase 2 foundation, Phase 5 v2: domain warp,
+## cliff bands, ledges — plan: docs/plans/phase-5-realistic-mountain.md D2).
 ##
-## Radial cone (the mountain mass) + ridged fBm (ridges) + detail noise →
-## one heights array drives the visual ArrayMesh; collision is a trimesh
-## generated FROM that mesh so physics and visuals can never disagree.
-## (HeightMapShape3D was tried first — its data ordering mismatched and the
-## goat fell through; trimesh removed the whole class of bug. See completion doc.)
+## Radial cone (the mountain mass) + domain-warped ridged fBm (ridges) +
+## detail noise → quantized cliff bands carve walkable treads and steep
+## risers into the rock zone → one heights array drives the visual
+## ArrayMesh; collision is a trimesh generated FROM that mesh so physics
+## and visuals can never agree to disagree. (HeightMapShape3D was tried in
+## Phase 2 — its data ordering mismatched and the goat fell through;
+## trimesh removed the whole class of bug. See completion doc.)
+##
+## API FROZEN (Phase 5 D2 — controller, camera, vegetation, future race
+## system all depend on these): get_height_at / downhill_dir / surface_at /
+## slope_deg_at. New look lives in @export tunables, not new signatures.
 
 @export var seed_value: int = 1337
-@export var size := 512.0
-@export var peak_height := 130.0
-@export var grid := 128
+@export var size := 1024.0
+@export var peak_height := 260.0
+@export var grid := 192
+
+# Phase 5 look tunables (first guesses — F5 + reffimg/ steer, plan D8).
+@export var snow_line := 170.0
+@export var warp_strength := 60.0  # m of domain warp on structural noise
+@export var ridge_amp := 34.0
+@export var detail_amp := 3.5
+@export var band_height := 10.0  # m per cliff band
+@export var band_tread := 0.5  # fraction of a band that stays flat (ledges)
+@export var band_rise := 0.35  # fraction over which the riser climbs
 
 # Spawn disc: noise blends to zero inside this radius so the start is pure
 # cone slope (~27°) — standable, runnable, no spawn-slide (plan risk #1).
+# The blend is the FINAL gate: warp/bands never touch the spawn disc.
 const SPAWN_XZ := Vector2(0.0, -24.0)
 const SPAWN_FLAT_RADIUS := 26.0
 
 # Surface classification (Phase 3, decision D1/D2).
 enum Surface { ROCK, GRASS, SNOW, ICE }
-const SNOW_LINE := 92.0
 const ICE_MASK_THRESHOLD := 0.35
 
 var _heights := PackedFloat32Array()
 var _verts := 0  # grid + 1 samples per side
 var _mesh: ArrayMesh
 var _ice_mask := FastNoiseLite.new()
+var _warp_noise := FastNoiseLite.new()
 
 
 func _ready() -> void:
 	_ice_mask.seed = seed_value + 13
 	_ice_mask.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	_ice_mask.frequency = 1.0 / 60.0
+	_warp_noise.seed = seed_value + 29
+	_warp_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	_warp_noise.fractal_octaves = 2
+	_warp_noise.frequency = 1.0 / 300.0
 	_build()
 
 
@@ -68,11 +89,11 @@ func surface_at(x: float, z: float) -> int:
 	if _spawn_blend(x, z) < 1.0:
 		return Surface.ROCK
 	var h := get_height_at(x, z)
-	if h > SNOW_LINE:
+	if h > snow_line:
 		if _ice_mask.get_noise_2d(x, z) > ICE_MASK_THRESHOLD:
 			return Surface.ICE
 		return Surface.SNOW
-	if h > 25.0 or slope_deg_at(x, z) > 30.0:
+	if h > 45.0 or slope_deg_at(x, z) > 30.0:
 		return Surface.ROCK
 	return Surface.GRASS
 
@@ -86,6 +107,7 @@ func slope_deg_at(x: float, z: float) -> float:
 
 
 func _build() -> void:
+	var t0 := Time.get_ticks_msec()
 	_verts = grid + 1
 
 	var ridge := FastNoiseLite.new()
@@ -93,13 +115,13 @@ func _build() -> void:
 	ridge.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	ridge.fractal_octaves = 4
-	ridge.frequency = 1.0 / 180.0
+	ridge.frequency = 1.0 / 360.0
 
 	var detail := FastNoiseLite.new()
 	detail.seed = seed_value + 7
 	detail.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	detail.fractal_octaves = 3
-	detail.frequency = 1.0 / 40.0
+	detail.frequency = 1.0 / 80.0
 
 	_heights.resize(_verts * _verts)
 	var half := size / 2.0
@@ -112,6 +134,11 @@ func _build() -> void:
 
 	_make_mesh(half, step)
 	_make_collision()
+	# Load-time ledger (plan risk #1): the web build budget's first number.
+	print(
+		"TERRAIN: %dx%d heights, %d tris, build+trimesh %d ms"
+		% [_verts, _verts, grid * grid * 2, Time.get_ticks_msec() - t0]
+	)
 
 
 func _height_at(x: float, z: float, ridge: FastNoiseLite, detail: FastNoiseLite) -> float:
@@ -119,9 +146,34 @@ func _height_at(x: float, z: float, ridge: FastNoiseLite, detail: FastNoiseLite)
 	var cone := clampf(1.0 - r, 0.0, 1.0)
 	var noise_f := _spawn_blend(x, z)
 	var h := peak_height * cone
-	h += (ridge.get_noise_2d(x, z) * 0.5 + 0.5) * 18.0 * pow(cone, 0.7) * noise_f
-	h += detail.get_noise_2d(x, z) * 2.0 * pow(cone, 0.5) * noise_f
-	return maxf(h, 0.0)
+	if noise_f > 0.0:
+		# Domain warp — ridges stop reading as concentric cone ripples.
+		var wx := x + _warp_noise.get_noise_2d(x * 0.7, z * 0.7) * warp_strength
+		var wz := z + _warp_noise.get_noise_2d(x * 0.7 + 137.0, z * 0.7 + 91.0) * warp_strength
+		h += (ridge.get_noise_2d(wx, wz) * 0.5 + 0.5) * ridge_amp * pow(cone, 0.7) * noise_f
+		h += detail.get_noise_2d(wx, wz) * detail_amp * pow(cone, 0.5) * noise_f
+		h = maxf(h, 0.0)
+		# Cliff bands: quantize the rock zone — flat treads (ledges) between
+		# steep risers. Fades in above the grassy toe, out toward the snow
+		# line. Bands follow the (warped) height contours, so they read as
+		# cliff strata, not staircases.
+		var band_mask := (
+			smoothstep(55.0, 105.0, h) * (1.0 - smoothstep(snow_line - 50.0, snow_line, h))
+		)
+		if band_mask > 0.001:
+			h = lerpf(h, _band(h), band_mask)
+	return h
+
+
+## Cliff-band remap (plan D2): the first band_tread fraction of every band
+## stays flat (the tread/ledge), the riser climbs over band_rise — locally
+## steepening slopes without changing the total drop. Heightmap-honest:
+## no overhangs, just aggressive treads.
+func _band(h: float) -> float:
+	var steps := floorf(h / band_height)
+	var f := (h - steps * band_height) / band_height
+	var rise := smoothstep(band_tread, band_tread + band_rise, f)
+	return (steps + rise) * band_height
 
 
 func _spawn_blend(x: float, z: float) -> float:
@@ -136,16 +188,22 @@ func _make_mesh(half: float, step: float) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 1.0
+	# Phase 5 look v2 (plan D3): the shader shades WITHIN classifier zones;
+	# COLOR.rgb carries the zone color, COLOR.a the zone id / 3.0. Visual
+	# snow == grip snow — both come from surface_at().
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/terrain_blend.gdshader")
+	mat.set_shader_parameter("snow_line", snow_line)
 	st.set_material(mat)
 
 	for iz in _verts:
 		for ix in _verts:
 			var x := -half + ix * step
 			var z := -half + iz * step
-			st.set_color(_color_for_surface(surface_at(x, z)))
+			var surf := surface_at(x, z)
+			var c := _color_for_surface(surf)
+			c.a = float(surf) / 3.0
+			st.set_color(c)
 			st.add_vertex(Vector3(x, _heights[iz * _verts + ix], z))
 
 	for iz in grid:
