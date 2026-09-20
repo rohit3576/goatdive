@@ -24,12 +24,21 @@ var _last_gate := -1
 var _teleports := 0
 var _racing := false
 
+# Phase 8 Step 2: corridor obstacle records (pines + rocks + logs) for the
+# avoidance probe — the same game-side truth the colliders were built from.
+var _obs: Array = []
+var _av_count := 0  # records inside the forward cone (F3)
+
 
 func _ready() -> void:
 	_goat = get_parent() as GoatController
 	var level := _goat.get_parent()
 	_course = level.get_node_or_null("Course") as CourseBuilder
 	_terrain = level.get_node_or_null("Terrain") as TerrainGenerator
+	var obs := level.get_node_or_null("Obstacles") as Obstacles
+	if obs != null:
+		for kind in ["pines", "rocks", "logs"]:
+			_obs.append_array(obs.get_obstacles(kind))
 	_goat.set_autopilot(true)
 	EventBus.race_started.connect(func() -> void: _racing = true)
 	EventBus.race_finished.connect(func(_t: float) -> void: _racing = false)
@@ -62,6 +71,49 @@ func _physics_process(delta: float) -> void:
 		dir = Vector2(-_goat.global_transform.basis.z.z, -_goat.global_transform.basis.z.x).normalized()
 	else:
 		dir = dir.normalized()
+
+	# --- Obstacle avoidance (Phase 8 Step 2, plan D1/D8): steer away from
+	#     the nearest corridor record inside the forward cone. Record-based
+	#     — no physics queries; a few hundred cheap checks per tick.
+	#     Strength ∝ closeness (1/d), clamped; logs are avoid-first (the
+	#     brain plans no jumps here — the ledge probe stays the only jump
+	#     trigger). Applied to dir BEFORE the yaw/body decomposition, so
+	#     AI_WISH_SMOOTH still rounds the corner (no zigzag fight). ---
+	_av_count = 0
+	if not _obs.is_empty():
+		var threat_d := INF
+		var threat_off := Vector2.ZERO  # offset to the threat's CLOSEST point
+		for o in _obs:
+			var rec: Dictionary = o
+			var op: Vector3 = rec["pos"]
+			var to := Vector2(op.x - pos.x, op.z - pos.z)
+			var off := to  # logs: offset to the closest point on the segment
+			if rec.has("axis"):
+				# Segment obstacle (fallen log): project goat onto the axis.
+				var ax: Vector3 = rec["axis"]
+				var hl: float = rec["half_len"]
+				var s := clampf(-to.dot(Vector2(ax.x, ax.z)), -hl, hl)
+				off = to + Vector2(ax.x, ax.z) * s
+			var d := off.length() - float(rec["r"]) - 0.35  # goat capsule radius
+			if d > Config.AI_AVOID_R:
+				continue
+			if off.normalized().dot(dir) < 0.35:  # ~70° half-cone ahead
+				continue
+			_av_count += 1
+			if d < threat_d:
+				threat_d = d
+				threat_off = off
+		if threat_d < INF:
+			# Threat at positive rotation from dir (cross_z > 0) → steer the
+			# other way: rotate NEGATIVE (away). Sign is pure Vector2 algebra.
+			# √ weight: front-loaded — useful steer early in the approach.
+			var w := sqrt(clampf(1.0 - threat_d / Config.AI_AVOID_R, 0.0, 1.0))
+			var side := signf(dir.x * threat_off.y - dir.y * threat_off.x)
+			if side == 0.0:
+				side = 1.0  # head-on: pick a side, any side
+			dir = dir.rotated(
+				-side * w * deg_to_rad(Config.AI_AVOID_MAX_DEG)
+			).normalized()
 
 	# --- Own the yaw: rotate the body toward the target (mouse-equivalent,
 	#     rate-limited so AI carving reads like player carving). ---
@@ -142,6 +194,7 @@ func get_debug_state() -> Dictionary:
 		"gate": _gate_from_idx(),
 		"stuck": _stuck,
 		"teleports": _teleports,
+		"avoid": _av_count,
 	}
 
 

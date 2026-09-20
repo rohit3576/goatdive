@@ -39,12 +39,12 @@ func _process(_delta: float) -> void:
 	var race_line := ""
 	if _race != null:
 		var r := _race.get_race_state()
-		race_line = "\nrace %s  gate %d/%d  %.0f m  respawn G%d" % [
-			r.state, r.gates_passed, r.gate_count, r.dist_to_finish, r.gates_passed,
+		race_line = "\nrace %s  gate %d/%d  %.0f m  respawn G%d  hits %d" % [
+			r.state, r.gates_passed, r.gate_count, r.dist_to_finish, r.gates_passed, r.hits,
 		]
 		for ai in r.ai_states:
-			race_line += "\nai %s  gate %s  stuck %.1f  tp %d" % [
-				ai.profile, ai.gate, ai.stuck, ai.teleports,
+			race_line += "\nai %s  gate %s  stuck %.1f  tp %d  av %d" % [
+				ai.profile, ai.gate, ai.stuck, ai.teleports, ai.avoid,
 			]
 	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s" % [
 		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, race_line,

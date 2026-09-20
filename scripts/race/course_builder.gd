@@ -28,6 +28,9 @@ var gate_forwards := PackedVector3Array()
 var _cum := PackedFloat32Array()  # cumulative length at each polyline vertex
 var _length := 0.0
 
+# Phase 8 D4 danger chords: {entry, exit, ratio, slope_main, slope_chord}.
+var chords: Array[Dictionary] = []
+
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
@@ -40,9 +43,19 @@ func _ready() -> void:
 		_pines = veg.get_placements("pines")
 	_walk()
 	_spawn_gates()
+	_find_chords()
 	if gate_points.is_empty():
 		push_warning("Course: walk produced no gates")
 		return
+	if not chords.is_empty():
+		var c: Dictionary = chords[0]
+		print(
+			"COURSE: chord 1 — ratio %.2f, slope %.1f°→%.1f° (%s)"
+			% [
+				c["ratio"], c["slope_main"], c["slope_chord"],
+				"steeper" if c["slope_chord"] > c["slope_main"] else "surface",
+			]
+		)
 	print(
 		"COURSE: %d gates, descent %.0f→%.0f m, length %.0f m in %d ms"
 		% [
@@ -55,6 +68,24 @@ func _ready() -> void:
 
 func course_length() -> float:
 	return _length
+
+
+## Min XZ distance from a point to the course polyline (segment walk).
+## Phase 8: the corridor definition lives with the polyline's owner —
+## obstacle building (Obstacles) and difficulty telemetry (RaceManager)
+## both ask here.
+func corridor_dist(p: Vector3) -> float:
+	var best := INF
+	for i in polyline.size() - 1:
+		var a: Vector3 = polyline[i]
+		var b: Vector3 = polyline[i + 1]
+		var ab := Vector2(b.x - a.x, b.z - a.z)
+		var t := clampf(
+			Vector2(p.x - a.x, p.z - a.z).dot(ab) / ab.length_squared(), 0.0, 1.0
+		)
+		var proj := Vector2(a.x, a.z) + ab * t
+		best = minf(best, proj.distance_to(Vector2(p.x, p.z)))
+	return best
 
 
 func get_gates() -> Array[Checkpoint]:
@@ -191,3 +222,207 @@ func _polyline_add(p: Vector3) -> void:
 		_length += p.distance_to(polyline[polyline.size() - 1])
 	_cum.append(_length)
 	polyline.append(p)
+
+
+# --- danger chords (Phase 8, plan D4) -----------------------------------------
+#
+# Where the walk meanders, the chord across the bend is the danger line:
+# shorter by construction, steeper/icier by REQUIREMENT (a shortcut that
+# costs nothing is a bug, not a feature). Marked at both ends; player-only
+# v1 — the herd stays on the polyline (README parks AI shortcuts later).
+
+
+const CHORD_SCAN_STEP := 4  # vertices between scan starts (~32 m)
+const CHORD_MAX_ARC := 220.0  # m — beyond this the "bend" is the mountain
+
+
+func _find_chords() -> void:
+	var n := polyline.size()
+	if n < 12 or Config.CHORD_MAX_COUNT <= 0:
+		return
+	var used_until := -1
+	var best_ratio_seen := 1.0  # diagnostic: closest anyone came to a bend
+	for _want in Config.CHORD_MAX_COUNT:
+		var best := {}
+		var best_score := 0.0
+		var i := 2
+		while i < n - 3:
+			if i <= used_until:
+				i += 1
+				continue
+			var j := i + 2
+			while j < n - 2 and _cum[j] - _cum[i] <= CHORD_MAX_ARC:
+				var arc := _cum[j] - _cum[i]
+				if arc >= Config.CHORD_MIN_ARC:
+					var a: Vector3 = polyline[i]
+					var b: Vector3 = polyline[j]
+					var chord_len := Vector2(b.x - a.x, b.z - a.z).length()
+					var ratio := chord_len / arc
+					best_ratio_seen = minf(best_ratio_seen, ratio)
+					if ratio < Config.CHORD_RATIO and ratio < 1.0 - best_score:
+						if _chord_qualifies(i, j, a, b):
+							best = {"i": i, "j": j, "ratio": ratio}
+							best_score = 1.0 - ratio
+				j += 1
+			i += CHORD_SCAN_STEP
+		if best.is_empty():
+			break
+		var bi: int = best["i"]
+		var bj: int = best["j"]
+		_used_chord_range(bi, bj)
+		used_until = bj
+		var entry: Vector3 = polyline[bi]
+		var exit_p: Vector3 = polyline[bj]
+		_spawn_chord_flags(entry, exit_p)
+		chords.append({
+			"entry": entry,
+			"exit": exit_p,
+			"ratio": best["ratio"],
+			"slope_main": _mean_slope_along(bi, bj, false),
+			"slope_chord": _mean_slope_along(bi, bj, true),
+		})
+	if chords.is_empty():
+		print(
+			"COURSE: no qualifying danger chord — best bend ratio %.2f (need < %.2f); the mountain honestly has no big meander (seed decides)"
+			% [best_ratio_seen, Config.CHORD_RATIO]
+		)
+
+
+func _used_chord_range(_i: int, _j: int) -> void:
+	pass  # hook: range bookkeeping if overlap rules grow
+
+
+## Danger qualification (plan D4): the chord must COST something —
+## measurably steeper mean slope, or a nastier surface mix (ice/snow the
+## groomed line avoids), and stay inside the playable ring.
+func _chord_qualifies(i: int, j: int, a: Vector3, b: Vector3) -> bool:
+	var chord_dir := Vector2(b.x - a.x, b.z - a.z)
+	var chord_len := chord_dir.length()
+	if chord_len < 1.0:
+		return false
+	chord_dir = chord_dir / chord_len
+	# Bounds: midpoint + both ends inside the playable ring; spawn clear.
+	var mid := (a + b) * 0.5
+	if mid.length() > Config.RACE_PLAYABLE_RADIUS or a.length() > Config.RACE_PLAYABLE_RADIUS or b.length() > Config.RACE_PLAYABLE_RADIUS:
+		return false
+	if Vector2(a.x, a.z).distance_to(Vector2(0.0, -24.0)) < 50.0:
+		return false
+	var slope_main := _mean_slope_along(i, j, false)
+	var slope_chord := _mean_slope_along(i, j, true)
+	if slope_chord > slope_main + 2.0:
+		return true  # steeper — dangerous by grade
+	# Surface: sample both lines; the chord must carry more ice/snow.
+	return _ice_fraction_chord(a, b, chord_dir) > _ice_fraction_window(i, j) + 0.15
+
+
+## Mean |slope| per sample — along the polyline window (chord=false) or
+## straight across it (chord=true).
+func _mean_slope_along(i: int, j: int, chord: bool) -> float:
+	if _terrain == null:
+		return 0.0
+	var total := 0.0
+	var count := 0
+	if chord:
+		var a: Vector3 = polyline[i]
+		var b: Vector3 = polyline[j]
+		var dir := Vector2(b.x - a.x, b.z - a.z)
+		var len := dir.length()
+		if len < 1.0:
+			return 0.0
+		dir = dir / len
+		var steps := maxi(2, int(len / 8.0))
+		for k in steps + 1:
+			var x := a.x + dir.x * len * k / steps
+			var z := a.z + dir.y * len * k / steps
+			total += _terrain.slope_deg_at(x, z)
+			count += 1
+	else:
+		for k in range(i, j + 1):
+			var p: Vector3 = polyline[k]
+			total += _terrain.slope_deg_at(p.x, p.z)
+			count += 1
+	return total / maxf(1, count)
+
+
+## ICE/SNOW fraction along the straight chord.
+func _ice_fraction_chord(a: Vector3, b: Vector3, dir: Vector2) -> float:
+	if _terrain == null:
+		return 0.0
+	var nasty := 0
+	var count := 0
+	var len := Vector2(b.x - a.x, b.z - a.z).length()
+	var steps := maxi(2, int(len / 8.0))
+	for k in steps + 1:
+		var x := a.x + dir.x * len * k / steps
+		var z := a.z + dir.y * len * k / steps
+		var surf := _terrain.surface_at(x, z)
+		if surf == TerrainGenerator.Surface.ICE or surf == TerrainGenerator.Surface.SNOW:
+			nasty += 1
+		count += 1
+	return float(nasty) / maxf(1, count)
+
+
+## ICE/SNOW fraction along the polyline window [i, j].
+func _ice_fraction_window(i: int, j: int) -> float:
+	if _terrain == null:
+		return 0.0
+	var nasty := 0
+	var count := 0
+	for k in range(i, j + 1):
+		var p: Vector3 = polyline[k]
+		var surf := _terrain.surface_at(p.x, p.z)
+		if surf == TerrainGenerator.Surface.ICE or surf == TerrainGenerator.Surface.SNOW:
+			nasty += 1
+		count += 1
+	return float(nasty) / maxf(1, count)
+
+
+## Flag pairs (2 posts + pennant, danger red/white) at chord entry and
+## exit, nudged off the main line toward the chord so the cut reads as a
+## CHOICE. Visual only — markers are neither trigger nor obstacle.
+func _spawn_chord_flags(entry: Vector3, exit_p: Vector3) -> void:
+	var mat := _chord_mat()
+	var dir_chord := Vector3(exit_p.x - entry.x, 0.0, exit_p.z - entry.z)
+	if dir_chord.length_squared() < 1.0:
+		return
+	dir_chord = dir_chord.normalized()
+	for end_point in [entry, exit_p]:
+		var base: Vector3 = end_point
+		var flag := MeshInstance3D.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var post := CylinderMesh.new()
+		post.top_radius = 0.04
+		post.bottom_radius = 0.06
+		post.height = 1.4
+		for side in [-1.0, 1.0]:
+			var perp := Vector3(-dir_chord.z, 0.0, dir_chord.x) * float(side) * 0.9
+			st.append_from(
+				post, 0, Transform3D(Basis.IDENTITY, base + perp + Vector3.UP * 0.7)
+			)
+		var pennant := PlaneMesh.new()  # faces +Y — stand it up
+		pennant.size = Vector2(1.6, 0.5)
+		var up := Basis(Vector3.RIGHT, PI * 0.5)
+		st.append_from(
+			pennant, 0, Transform3D(
+				up * Basis(Vector3.UP, atan2(-dir_chord.x, -dir_chord.z)),
+				base + Vector3.UP * 1.45
+			)
+		)
+		flag.mesh = st.commit()
+		flag.material_override = mat
+		flag.name = "ChordFlag%d" % chords.size()
+		add_child(flag)
+
+
+static var _chord_flag_mat: StandardMaterial3D
+
+
+func _chord_mat() -> StandardMaterial3D:
+	if _chord_flag_mat == null:
+		_chord_flag_mat = StandardMaterial3D.new()
+		_chord_flag_mat.albedo_color = Color(0.86, 0.15, 0.12)
+		_chord_flag_mat.emission_enabled = true
+		_chord_flag_mat.emission = Color(0.55, 0.08, 0.05)
+		_chord_flag_mat.emission_energy_multiplier = 0.6
+	return _chord_flag_mat

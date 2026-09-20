@@ -37,6 +37,7 @@ func _ready() -> void:
 		return
 	_gates = _course.get_gates()
 	EventBus.goat_bonked.connect(_on_bonked)
+	EventBus.goat_hit_obstacle.connect(_on_obstacle_hit)
 
 
 ## Wired by mountain_level.gd AFTER racers spawn (children _ready before
@@ -54,6 +55,7 @@ func begin(racers: Array) -> void:
 			"finished": false,
 			"time": 0.0,
 			"progress": 0.0,
+			"hits": 0,
 		})
 	_countdown = Config.RACE_COUNTDOWN
 	if not _gates.is_empty():
@@ -112,7 +114,7 @@ func get_race_state() -> Dictionary:
 			"time": 0.0, "time_str": "0:00.00", "gates_passed": 0,
 			"gate_count": _gates.size(), "dist_to_finish": 0.0,
 			"position": 1, "racers": 0, "wrong_way": false,
-			"top_speed": 0.0, "crashes": 0, "splits": [], "best_split": 0.0,
+			"top_speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
 			"best_split_str": "—", "finished": false, "standings": [],
 			"ai_states": [],
 		}
@@ -137,6 +139,7 @@ func get_race_state() -> Dictionary:
 		"wrong_way": _wrong_way,
 		"top_speed": _top_speed,
 		"crashes": _crashes,
+		"hits": int(_racers[0]["hits"]),  # player's corridor-obstacle hits (D8)
 		"splits": splits,
 		"best_split": _best_split(splits),
 		"best_split_str": (
@@ -205,10 +208,22 @@ func _player_finish() -> void:
 # --- bookkeeping -------------------------------------------------------------
 
 
-func _on_bonked(impact: float, _direction: Vector3) -> void:
-	# Player crash proxy for the results panel: bonks at tumble strength.
-	if _state == State.RACING and impact >= Config.TUMBLE_MIN_IMPACT:
+func _on_bonked(impact: float, _direction: Vector3, goat: Node3D) -> void:
+	# Player crash proxy for the results panel: the player's own tumble-grade
+	# bonks, anywhere, any collider (Phase 8: attribution makes it player-only
+	# — pre-Phase 8, ANY goat's tumble counted as a player crash).
+	if _state == State.RACING and impact >= Config.TUMBLE_MIN_IMPACT and not _racers.is_empty() and goat == _racers[0]["node"]:
 		_crashes += 1
+
+
+## Difficulty telemetry (Phase 8 D8): per-racer OBSTACLE hits — the signal
+## only fires for corridor-body colliders, so goat-goat bumps and terrain
+## bonks never pollute the mountain's report card.
+func _on_obstacle_hit(_impact: float, goat: Node3D) -> void:
+	var rec := _record_for(goat)
+	if rec.is_empty():
+		return
+	rec["hits"] = int(rec["hits"]) + 1
 
 
 func _update_wrong_way(delta: float) -> void:

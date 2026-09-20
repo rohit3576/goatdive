@@ -46,6 +46,11 @@ var _tumbling := false
 var _tumble_axis := Vector3.RIGHT
 var _tumble_spin := 0.0
 
+# Bonk cooldown (Phase 8): a goat pinned between gravity and an obstacle
+# re-impacts at ~10 Hz — one crash must read as ONE crash (signal, trauma,
+# telemetry), not a jackhammer.
+var _bonk_cd := 0.0
+
 @onready var _body := $Body as Node3D
 
 var _terrain: TerrainGenerator
@@ -111,6 +116,7 @@ func _physics_process(delta: float) -> void:
 	_since_floor = 0.0 if on_floor else _since_floor + delta
 	_jump_buffer = maxf(0.0, _jump_buffer - delta)
 	_stumble = maxf(0.0, _stumble - delta)
+	_bonk_cd = maxf(0.0, _bonk_cd - delta)
 	if _input_enabled:
 		if _autopilot:
 			if _ai_jump:
@@ -196,7 +202,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = Config.JUMP_VELOCITY
 		_jump_buffer = 0.0
 		_since_floor = Config.JUMP_COYOTE + 1.0  # consume — no double jump
-		EventBus.goat_jumped.emit()
+		EventBus.goat_jumped.emit(self)
 
 	var was_on_floor := on_floor
 	var pre_vy := velocity.y
@@ -206,7 +212,7 @@ func _physics_process(delta: float) -> void:
 	# Landing transition: measure impact, tell the world, maybe stumble.
 	if not was_on_floor and is_on_floor():
 		var impact := maxf(0.0, -pre_vy)
-		EventBus.goat_landed.emit(impact)
+		EventBus.goat_landed.emit(impact, self)
 		if impact > Config.STUMBLE_IMPACT:
 			_stumble = Config.STUMBLE_TIME
 
@@ -214,13 +220,19 @@ func _physics_process(delta: float) -> void:
 	# (steep-but-climbable faces are floors via floor_max_angle, not bonks).
 	# Mid-air hits above the tumble threshold crash the goat (Phase 5 D6).
 	for i in get_slide_collision_count():
-		var n := get_slide_collision(i).get_normal()
+		var col := get_slide_collision(i)
+		var n := col.get_normal()
 		if absf(n.y) < 0.35:
 			var bonk := maxf(0.0, -pre_vel.dot(n))
-			if bonk > Config.BONK_MIN_SPEED:
+			if bonk > Config.BONK_MIN_SPEED and _bonk_cd <= 0.0:
+				_bonk_cd = Config.BONK_COOLDOWN
 				var dir := n
 				dir.y = 0.0
-				EventBus.goat_bonked.emit(bonk, dir)
+				EventBus.goat_bonked.emit(bonk, dir, self)
+				var hit: Node3D = col.get_collider()
+				if hit != null and hit.is_in_group("obstacles"):
+					# Phase 8 D8: corridor-obstacle hit — difficulty telemetry.
+					EventBus.goat_hit_obstacle.emit(bonk, self)
 				if not was_on_floor and bonk > Config.TUMBLE_MIN_IMPACT:
 					_enter_tumble(bonk, dir)
 			break

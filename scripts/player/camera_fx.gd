@@ -179,15 +179,15 @@ func _process(delta: float) -> void:
 	rotation = Vector3(tilt_pitch + _pitch_x + fall_pitch + shake_pitch, 0.0, tilt_roll + lean + shake_roll)
 
 
-func _on_jumped() -> void:
-	if not Config.CAM_FX:
+func _on_jumped(goat: Node3D) -> void:
+	if goat != _goat or not Config.CAM_FX:
 		return
 	_dip_v -= Config.DIP_JUMP  # negative dip = upward pop
 	_pitch_v += Config.DIP_PITCH_JUMP
 
 
-func _on_landed(impact: float) -> void:
-	if not Config.CAM_FX:
+func _on_landed(impact: float, goat: Node3D) -> void:
+	if goat != _goat or not Config.CAM_FX:
 		return
 	var k := clampf(impact / Config.STUMBLE_IMPACT, 0.0, 1.5)
 	_dip_v += Config.DIP_LAND * k  # small hops tick, cliff drops slam
@@ -196,8 +196,8 @@ func _on_landed(impact: float) -> void:
 		_add_trauma(impact)
 
 
-func _on_bonked(impact: float, direction: Vector3) -> void:
-	if not Config.CAM_FX:
+func _on_bonked(impact: float, direction: Vector3, goat: Node3D) -> void:
+	if goat != _goat or not Config.CAM_FX:
 		return
 	_add_trauma(impact)
 	if direction.length_squared() > 0.001:

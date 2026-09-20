@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.7.0-phase7"
+const VERSION := "0.8.0-phase8"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -40,6 +40,7 @@ static var CAM_FX := true
 const FOV_BASE := 78.0
 const FOV_MAX := 88.0
 const BONK_MIN_SPEED := 5.0  # m/s into a wall before the camera cares
+const BONK_COOLDOWN := 0.35  # s between bonk signals (anti-jackhammer, Ph8)
 
 # Phase 4 — bob + FOV (plan Step 2). Amplitudes are subtle first guesses.
 const BOB_RATE := 9.0  # bob phase rad/s at MOVE_SPEED (rate scales with speed)
@@ -119,6 +120,27 @@ const AI_LEDGE_RECKLESS := 5.0
 const AI_COLOR_CAUTIOUS := Color(0.45, 0.60, 0.35)  # sage
 const AI_COLOR_BOLD := Color(0.75, 0.40, 0.20)  # rust
 const AI_COLOR_RECKLESS := Color(0.40, 0.22, 0.22)  # charcoal-red
+
+# Phase 8 — AI obstacle avoidance (plan Step 2): record-based cone probe;
+# strength ∝ closeness of the nearest threat, clamped so the lookahead
+# still owns the line (AI_WISH_SMOOTH rounds the corner). Weight is
+# CONVEX (√) — strength arrives early in the approach, not at impact.
+const AI_AVOID_R := 12.0  # m — probe radius ahead of the heading
+const AI_AVOID_MAX_DEG := 35.0  # steer-away clamp
+
+# Phase 8 — mountain gameplay (plan: docs/plans/phase-8-mountain-gameplay.md).
+# Corridor (D1): pines/rocks are solid only within this radius of the race
+# line — the far treeline stays scenery. Cap bounds web broadphase (D9).
+const OBSTACLE_CORRIDOR_R := 45.0
+const OBSTACLE_CAP := 220
+const OBSTACLE_LOGS := 2  # fallen logs per course (D3 rhythm-breakers)
+
+# Phase 8 — danger chords (plan D4): where the walk meanders, the straight
+# cut is the danger line — shorter by ratio, must be measurably worse
+# terrain (steeper / icier) or it's rejected: a free shortcut is a bug.
+const CHORD_RATIO := 0.7  # chord length < this × arc length = a real bend
+const CHORD_MIN_ARC := 80.0  # m of arc — chords are for big meanders only
+const CHORD_MAX_COUNT := 2
 
 # Horns (POV framing).
 const HORN_LENGTH := 0.35

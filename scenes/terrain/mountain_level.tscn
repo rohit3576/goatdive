@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scenes/terrain/mountain_level.gd" id="1_lvl"]
 [ext_resource type="Script" path="res://scripts/terrain/terrain_generator.gd" id="2_terr"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/race/course_builder.gd" id="5_course"]
 [ext_resource type="Script" path="res://scripts/race/race_manager.gd" id="6_race"]
 [ext_resource type="Script" path="res://scripts/race/race_hud.gd" id="7_hud"]
+[ext_resource type="Script" path="res://scripts/terrain/obstacles.gd" id="8_obs"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -43,6 +44,9 @@ script = ExtResource("4_atm")
 
 [node name="Course" type="Node3D" parent="."]
 script = ExtResource("5_course")
+
+[node name="Obstacles" type="Node3D" parent="."]
+script = ExtResource("8_obs")
 
 [node name="RaceManager" type="Node3D" parent="."]
 script = ExtResource("6_race")
