@@ -129,23 +129,9 @@ func _corridor_dist(p: Vector3) -> float:
 	return _course.corridor_dist(p)
 
 
-## D10 exclusion: gate crossing slabs (trigger depth centred on the gate)
-## plus the 10 m braking strip after each gate. The 8 m respawn approach
-## (6 m before the gate, facing in) lies inside the slab's back half.
+## D10 exclusion: the polyline owner decides (shared with Coins).
 func _in_d10_zone(p: Vector3) -> bool:
-	var pts := _course.gate_points
-	var fwds := _course.gate_forwards
-	for i in pts.size():
-		var f: Vector3 = fwds[i]
-		var rel := Vector2(p.x - pts[i].x, p.z - pts[i].z)
-		var along := rel.dot(Vector2(f.x, f.z))
-		var lat := absf(rel.dot(Vector2(-f.z, f.x)))
-		var width := Config.RACE_GATE_WIDTH * (1.6 if i == pts.size() - 1 else 1.0)
-		var half_lat := (width + Checkpoint.TRIGGER_SIDE_MARGIN) * 0.5
-		var back := Checkpoint.TRIGGER_DEPTH * 0.5
-		if lat <= half_lat and along >= -back and along <= back + 10.0:
-			return true
-	return false
+	return _course.in_gate_zone(p)
 
 
 func _add_cylinder(pos: Vector3, radius: float, height: float) -> void:

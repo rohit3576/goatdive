@@ -36,6 +36,14 @@ func _process(_delta: float) -> void:
 	if _fx != null:
 		var f := _fx.get_fx_debug()
 		fx_line = "\nfx fov %.1f  trauma %.2f  dip %.3f" % [f.fov, f.trauma, f.dip]
+	var trick_line := ""
+	var tricks := _goat.get_node_or_null("TrickDetector")
+	if tricks != null:
+		var td: Dictionary = tricks.call("get_debug_state")
+		trick_line = "\ntrick air %s  flip %s %d%%  spin %.0f°  wins %d" % [
+			td["air"], td["flip"], int(float(td["flip_progress"]) * 100.0),
+			td["spin_deg"], td["windows"],
+		]
 	var race_line := ""
 	if _race != null:
 		var r := _race.get_race_state()
@@ -46,6 +54,6 @@ func _process(_delta: float) -> void:
 			race_line += "\nai %s  gate %s  stuck %.1f  tp %d  av %d" % [
 				ai.profile, ai.gate, ai.stuck, ai.teleports, ai.avoid,
 			]
-	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s" % [
-		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, race_line,
+	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s%s" % [
+		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, trick_line, race_line,
 	]

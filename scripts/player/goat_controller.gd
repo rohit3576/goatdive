@@ -46,6 +46,16 @@ var _tumbling := false
 var _tumble_axis := Vector3.RIGHT
 var _tumble_spin := 0.0
 
+# Deliberate trick spin (Phase 9 D1/D2): the SAME discipline, voluntarily
+# triggered — a controlled Body-only rotation. The capsule and physics
+# never move; landing mid-flip freezes the pose and the upright realign
+# (below) absorbs it gracefully.
+var _trick_active := false
+var _trick_axis := Vector3.RIGHT
+var _trick_t := 0.0
+var _trick_dur := 0.55
+var _trick_q := Quaternion.IDENTITY
+
 # Bonk cooldown (Phase 8): a goat pinned between gravity and an obstacle
 # re-impacts at ~10 Hz — one crash must read as ONE crash (signal, trauma,
 # telemetry), not a jackhammer.
@@ -54,6 +64,32 @@ var _bonk_cd := 0.0
 @onready var _body := $Body as Node3D
 
 var _terrain: TerrainGenerator
+
+
+## Phase 9 trick API — the detector calls this on Q/E while airborne.
+## Front/back axis = the goat's local right at flip start (visual sign
+## baked; F5 flips it if the first read is backwards).
+func start_trick_spin(axis: Vector3, duration: float) -> void:
+	if _trick_active or _tumbling or is_on_floor():
+		return
+	_trick_axis = axis.normalized()
+	_trick_dur = maxf(0.2, duration)
+	_trick_t = 0.0
+	_trick_q = _body.quaternion
+	_trick_active = true
+
+
+func _update_trick_spin(delta: float) -> void:
+	if not _trick_active:
+		return
+	if _tumbling or is_on_floor():
+		_trick_active = false  # freeze pose; the realign absorbs it
+		return
+	_trick_t += delta
+	var ang := minf(_trick_t / _trick_dur, 1.0) * TAU
+	_body.quaternion = _trick_q * Quaternion(_trick_axis, ang)
+	if _trick_t >= _trick_dur:
+		_trick_active = false  # full 360 → quaternion restored exactly
 
 
 func setup_spawn(t: Transform3D) -> void:
@@ -238,6 +274,13 @@ func _physics_process(delta: float) -> void:
 			break
 
 	_update_tumble(delta)
+	_update_trick_spin(delta)
+	# Always-upright realign when neither tumbling nor mid-flip: absorbs
+	# partial-flip landings (and stale tilt from any source) gracefully.
+	if not _tumbling and not _trick_active:
+		_body.quaternion = _body.quaternion.slerp(
+			Quaternion.IDENTITY, minf(1.0, Config.TUMBLE_RECOVER_SMOOTH * delta)
+		)
 
 	# World vertical speed from position delta (clamped: teleport spikes are
 	# not physics). Must run before the respawn teleport resets _last_y.

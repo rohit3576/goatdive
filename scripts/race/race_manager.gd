@@ -23,6 +23,11 @@ var _crashes := 0
 var _wrong_way := false
 var _wrong_time := 0.0
 
+# Phase 9 score (D8: per-race, dies with the scene; no persistence).
+var _score := 0
+var _best_trick := ""
+var _best_trick_pts := 0
+
 # Racer records (Phase 6 D6, Phase 7 D9). Index 0 = player.
 # {name, node, gate_idx, splits, finished, time, progress}
 var _racers: Array[Dictionary] = []
@@ -38,6 +43,7 @@ func _ready() -> void:
 	_gates = _course.get_gates()
 	EventBus.goat_bonked.connect(_on_bonked)
 	EventBus.goat_hit_obstacle.connect(_on_obstacle_hit)
+	EventBus.trick_scored.connect(_on_trick_scored)
 
 
 ## Wired by mountain_level.gd AFTER racers spawn (children _ready before
@@ -115,7 +121,8 @@ func get_race_state() -> Dictionary:
 			"gate_count": _gates.size(), "dist_to_finish": 0.0,
 			"position": 1, "racers": 0, "wrong_way": false,
 			"top_speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
-			"best_split_str": "—", "finished": false, "standings": [],
+			"best_split_str": "—", 			"finished": false, "standings": [],
+			"score": 0, "best_trick": "",
 			"ai_states": [],
 		}
 	var player: Dictionary = _racers[0]
@@ -146,6 +153,8 @@ func get_race_state() -> Dictionary:
 			_fmt_time(_best_split(splits)) if splits.size() >= 2 else "—"
 		),
 		"finished": _state == State.FINISHED,
+		"score": _score,
+		"best_trick": _best_trick,
 		"standings": _standings(),
 		"ai_states": _ai_states(),
 	}
@@ -191,6 +200,11 @@ func gate_progress_for(node: Node) -> int:
 	return int(rec["gate_idx"]) if not rec.is_empty() else 0
 
 
+## Player identity check (HUD trick labels filter on this).
+func is_player(node: Node) -> bool:
+	return not _racers.is_empty() and node == _racers[0]["node"]
+
+
 func _respawn_at(gate: Checkpoint) -> Transform3D:
 	return Transform3D(
 		Basis.looking_at(gate.forward(), Vector3.UP),
@@ -202,6 +216,14 @@ func _player_finish() -> void:
 	_state = State.FINISHED
 	_player_time = _clock
 	_racers[0]["time"] = _clock
+	# Position bonus (Phase 9): style counts, but the podium prices in.
+	match _position_of(0):
+		1:
+			_score += 500
+		2:
+			_score += 250
+		3:
+			_score += 100
 	EventBus.race_finished.emit(_clock)
 
 
@@ -224,6 +246,17 @@ func _on_obstacle_hit(_impact: float, goat: Node3D) -> void:
 	if rec.is_empty():
 		return
 	rec["hits"] = int(rec["hits"]) + 1
+
+
+## Score intake (Phase 9): the detector's points are final (combo applied
+## window-side). Player-only — the herd races, it doesn't style.
+func _on_trick_scored(name: String, points: int, goat: Node3D) -> void:
+	if _state != State.RACING or _racers.is_empty() or goat != _racers[0]["node"]:
+		return
+	_score += points
+	if points > _best_trick_pts:
+		_best_trick_pts = points
+		_best_trick = name
 
 
 func _update_wrong_way(delta: float) -> void:

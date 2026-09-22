@@ -21,6 +21,7 @@ extends Camera3D
 const TAU := 6.283185307179586
 
 var _goat: GoatController
+var _tricks: Node  # TrickDetector (duck-typed: shared camera/game boundary)
 
 # Bob + shared grounded blend (tilt eases on the same envelope).
 var _bob_phase := 0.0
@@ -59,6 +60,7 @@ func _ready() -> void:
 	# (Phase 5 D10 tidy).
 	fov = Config.FOV_BASE
 	_goat = get_parent().get_parent() as GoatController
+	_tricks = _goat.get_node_or_null("TrickDetector")
 	EventBus.goat_jumped.connect(_on_jumped)
 	EventBus.goat_landed.connect(_on_landed)
 	EventBus.goat_bonked.connect(_on_bonked)
@@ -172,11 +174,30 @@ func _process(delta: float) -> void:
 	_fov_pop = move_toward(_fov_pop, 0.0, Config.RACE_GATE_PASS_FOV_POP * 3.0 * dt)
 	fov = lerpf(fov, fov_target + _fov_pop, minf(1.0, Config.FOV_LERP * dt))
 
+	# --- Trick flip nod (Phase 9 D3): a FRACTION of the flip as one smooth
+	# out-and-back pitch swing — reads as "I flipped" without the vomit.
+	# CAM_FX-gated like every other channel; zero when not flipping.
+	var flip_pitch := 0.0
+	if _tricks != null:
+		var td: Dictionary = _tricks.call("get_debug_state")
+		if bool(td["flipping"]):
+			var dir_sign := -1.0 if String(td["flip"]) == "front" else 1.0
+			flip_pitch = (
+				dir_sign
+				* Config.FLIP_CAM_FRACTION
+				* TAU
+				* sin(PI * float(td["flip_progress"]))
+			)
+
 	# --- Compose (single write point, D4). ---
 	position = Vector3(
 		bob_x + shake_x + _kick.x, bob_y + _dip_x + shake_y + _kick.y, _kick.z
 	)
-	rotation = Vector3(tilt_pitch + _pitch_x + fall_pitch + shake_pitch, 0.0, tilt_roll + lean + shake_roll)
+	rotation = Vector3(
+		tilt_pitch + _pitch_x + fall_pitch + shake_pitch + flip_pitch,
+		0.0,
+		tilt_roll + lean + shake_roll
+	)
 
 
 func _on_jumped(goat: Node3D) -> void:

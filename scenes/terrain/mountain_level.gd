@@ -25,6 +25,12 @@ func _ready() -> void:
 	goat.setup_spawn(goat.global_transform)
 	(goat.get_node("Head/Camera3D") as Camera3D).current = true
 
+	# Phase 9: the trick detector is player-only (D7) — tricks are
+	# listeners on the attributed signal vocabulary, never physics.
+	var tricks := TrickDetector.new()
+	tricks.name = "TrickDetector"
+	goat.add_child(tricks)
+
 	# Phase 7 D7: spawn grid — staggered behind/beside the player, ≥ 3 m
 	# apart, all facing gate 0. Slots stay CLOSE to the spawn center where
 	# the disc is pure cone — further out, the 13% noise blend makes local

@@ -9,6 +9,7 @@ var _manager: RaceManager
 var _top: Label
 var _count: Label
 var _wrong: Label
+var _trick_stack: VBoxContainer
 var _panel: PanelContainer
 var _res_title: Label
 var _res_rows: VBoxContainer
@@ -26,7 +27,21 @@ func _ready() -> void:
 	if _manager == null:
 		set_process(false)
 		return
+	EventBus.trick_scored.connect(_on_trick_scored)
 	_build()
+
+
+## Floating trick labels (Phase 9): the payout pops center-top and fades.
+func _on_trick_scored(name: String, points: int, goat: Node3D) -> void:
+	if _manager == null or not _manager.is_player(goat):
+		return
+	var l := _make_label(26, Color(1.0, 0.85, 0.3), Control.PRESET_TOP_LEFT)
+	l.text = "%s  +%d" % [name.to_upper().replace("_", " "), points]
+	_trick_stack.add_child(l)
+	var tw := l.create_tween()
+	tw.tween_interval(0.9)
+	tw.tween_property(l, "modulate:a", 0.0, 0.45)
+	tw.tween_callback(l.queue_free)
 
 
 func _build() -> void:
@@ -39,6 +54,13 @@ func _build() -> void:
 	_wrong.position = Vector2(0.0, 84.0)
 	_wrong.text = "WRONG WAY"
 	add_child(_wrong)
+
+	# Trick label stack (Phase 9): center-top, newest under the last.
+	_trick_stack = VBoxContainer.new()
+	_trick_stack.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_trick_stack.position = Vector2(0.0, 120.0)
+	_trick_stack.add_theme_constant_override("separation", 2)
+	add_child(_trick_stack)
 
 	_panel = PanelContainer.new()
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -71,10 +93,10 @@ func _process(_delta: float) -> void:
 		return
 	var r := _manager.get_race_state()
 
-	# Top bar: TIME · GATE · distance · position (honest "1/1", D6).
-	_top.text = "%s   GATE %d/%d   %d m   POS %d/%d" % [
+	# Top bar: TIME · GATE · distance · position · score (honest "1/1", D6).
+	_top.text = "%s   GATE %d/%d   %d m   POS %d/%d   ✦ %d" % [
 		r.time_str, r.gates_passed, r.gate_count, ceili(r.dist_to_finish),
-		r.position, r.racers,
+		r.position, r.racers, r.score,
 	]
 
 	# Countdown ticks (poll-driven: the bus stays for cross-module news).
@@ -102,8 +124,11 @@ func _process(_delta: float) -> void:
 		_results_shown = true
 		_res_title.text = "FINISH — %s" % r.time_str
 		_res_detail.text = (
-			"best split %s\n top speed %.1f m/s\n crashes %d"
-			% [r.best_split_str, r.top_speed, r.crashes]
+			"best split %s\n top speed %.1f m/s\n crashes %d\n score %d ✦%s"
+			% [
+				r.best_split_str, r.top_speed, r.crashes, r.score,
+				(" — " + String(r.best_trick).replace("_", " ")) if r.best_trick != "" else "",
+			]
 		)
 		_panel.visible = true
 		_refresh_rows(r)

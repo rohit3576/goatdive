@@ -14,3 +14,6 @@ signal goat_bonked(impact_speed: float, direction: Vector3, goat: Node3D)
 ## "obstacles" group (corridor body) — difficulty telemetry counts these,
 ## never goat-goat bumps or terrain bonks.
 signal goat_hit_obstacle(impact_speed: float, goat: Node3D)
+## Phase 9 D1: tricks are listeners. The detector fires this per scored
+## trick; the score system applies combo math, the HUD pops the label.
+signal trick_scored(name: String, points: int, goat: Node3D)

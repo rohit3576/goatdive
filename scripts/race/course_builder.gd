@@ -88,6 +88,24 @@ func corridor_dist(p: Vector3) -> float:
 	return best
 
 
+## D10 gate-zone test (Phase 8, shared): crossing slabs (trigger depth
+## centred on each gate) plus the 10 m braking strip after. The 8 m
+## respawn approach lies inside the slab's back half. Obstacles excludes
+## colliders and Coins exclude pickups with the same rule.
+func in_gate_zone(p: Vector3) -> bool:
+	for i in gate_points.size():
+		var f: Vector3 = gate_forwards[i]
+		var rel := Vector2(p.x - gate_points[i].x, p.z - gate_points[i].z)
+		var along := rel.dot(Vector2(f.x, f.z))
+		var lat := absf(rel.dot(Vector2(-f.z, f.x)))
+		var width := Config.RACE_GATE_WIDTH * (1.6 if i == gate_points.size() - 1 else 1.0)
+		var half_lat := (width + Checkpoint.TRIGGER_SIDE_MARGIN) * 0.5
+		var back := Checkpoint.TRIGGER_DEPTH * 0.5
+		if lat <= half_lat and along >= -back and along <= back + 10.0:
+			return true
+	return false
+
+
 func get_gates() -> Array[Checkpoint]:
 	return _gates
 

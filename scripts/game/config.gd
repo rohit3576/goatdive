@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.8.0-phase8"
+const VERSION := "0.9.0-phase9"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -141,6 +141,26 @@ const OBSTACLE_LOGS := 2  # fallen logs per course (D3 rhythm-breakers)
 const CHORD_RATIO := 0.7  # chord length < this × arc length = a real bend
 const CHORD_MIN_ARC := 80.0  # m of arc — chords are for big meanders only
 const CHORD_MAX_COUNT := 2
+
+# Phase 9 — tricks & scoring (plan: docs/plans/phase-9-tricks-and-scoring.md).
+# Every number is a first guess; F5 tunes the feel, never the code (D10).
+const TRICK_FLIP_TIME := 0.55  # s for the full Body 360 (Q/E)
+const TRICK_FLIP_CLEAN := 0.85  # flip completion that still banks on landing
+const TRICK_SPIN_DEG := 300.0  # mouse yaw in one air window = "360"
+const TRICK_LONG_JUMP_M := 15.0
+const TRICK_CLIFF_DROP_M := 6.0
+const TRICK_NEAR_MISS_R := 1.6  # m surface distance at speed
+const TRICK_NEAR_MISS_SPEED := 10.0
+const TRICK_NEAR_MISS_CD := 1.5  # s per obstacle between near-miss payouts
+const TRICK_PTS_FLIP := 500
+const TRICK_PTS_SPIN := 300
+const TRICK_PTS_LONG := 200
+const TRICK_PTS_CLIFF := 400
+const TRICK_PTS_LOG := 250
+const TRICK_PTS_NEAR := 100
+const TRICK_PTS_COIN := 50
+const TRICK_COMBO_STEP := 0.5  # multiplier step per distinct trick in a window
+const FLIP_CAM_FRACTION := 0.2  # D3: camera shares this much of the flip
 
 # Horns (POV framing).
 const HORN_LENGTH := 0.35
