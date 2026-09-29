@@ -7,7 +7,47 @@ extends Node3D
 
 const GOAT := preload("res://scenes/goat/goat.tscn")
 const AI_BRAIN := preload("res://scripts/race/ai_goat.gd")
+const MountainCatalog := preload("res://scripts/terrain/mountain_catalog.gd")
 const SPAWN_OFFSET := Vector2(0.0, -24.0)  # 24 m north of the peak (peak at origin)
+
+@export var mountain_id := ""
+
+
+func _enter_tree() -> void:
+	_apply_mountain_preset()
+
+
+func _apply_mountain_preset() -> void:
+	var m_id := mountain_id
+	if m_id == "":
+		var tree := get_tree()
+		var p: Node = null
+		if tree != null and tree.root != null:
+			p = tree.root.get_node_or_null("Progression")
+		if p == null:
+			p = get_node_or_null("/root/Progression")
+		if p != null:
+			m_id = String(p.get("current_mountain"))
+	if m_id == "":
+		m_id = "alpine_valley"
+
+	var preset: Dictionary = MountainCatalog.get_mountain(m_id)
+	var terrain := get_node_or_null("Terrain") as TerrainGenerator
+	if terrain != null:
+		terrain.seed_value = int(preset.get("seed_value", 1337))
+		terrain.peak_height = float(preset.get("peak_height", 260.0))
+		terrain.snow_line = float(preset.get("snow_line", 170.0))
+		terrain.warp_strength = float(preset.get("warp_strength", 60.0))
+		terrain.ridge_amp = float(preset.get("ridge_amp", 34.0))
+		terrain.detail_amp = float(preset.get("detail_amp", 3.5))
+		terrain.band_height = float(preset.get("band_height", 10.0))
+		terrain.band_tread = float(preset.get("band_tread", 0.5))
+		terrain.band_rise = float(preset.get("band_rise", 0.35))
+
+	var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if we != null and we.environment != null:
+		we.environment.fog_density = float(preset.get("fog_density", 0.003))
+		we.environment.ambient_light_energy = float(preset.get("sky_energy", 1.2))
 
 
 func _ready() -> void:

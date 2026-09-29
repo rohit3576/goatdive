@@ -17,3 +17,11 @@ signal goat_hit_obstacle(impact_speed: float, goat: Node3D)
 ## Phase 9 D1: tricks are listeners. The detector fires this per scored
 ## trick; the score system applies combo math, the HUD pops the label.
 signal trick_scored(name: String, points: int, goat: Node3D)
+## Phase 10 — progression: currency, XP, upgrades, unlocks.
+signal coins_changed(total: int, delta: int)
+signal xp_gained(total_xp: int, delta_xp: int)
+signal level_up(new_level: int)
+signal upgrade_purchased(stat: String, new_tier: int)
+signal mountain_unlocked(mountain_id: String)
+signal skin_unlocked(skin_id: String)
+

@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 Config="*res://scripts/game/config.gd"
 GameState="*res://scripts/game/game_state.gd"
 EventBus="*res://scripts/game/event_bus.gd"
+Progression="*res://scripts/game/progression.gd"
 
 [display]
 

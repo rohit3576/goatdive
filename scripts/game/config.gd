@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.9.0-phase9"
+const VERSION := "0.10.0-phase10"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -168,3 +168,38 @@ const HORN_CURVATURE := 0.5
 
 # World.
 const KILL_Y := -50.0
+
+# Phase 10 — progression & upgrades (plan: docs/plans/phase-10-progression.md).
+const SAVE_PATH := "user://progression.cfg"
+const XP_BASE_DIVISOR := 300.0
+
+const UPGRADE_MAX_TIER := 5
+const UPGRADE_COSTS: Array[int] = [100, 250, 500, 1000, 2000]
+
+const STAT_STEP_SPEED := 0.04     # +4% per tier
+const STAT_STEP_JUMP := 0.04      # +4% per tier
+const STAT_STEP_GRIP := 0.05      # +5% per tier
+const STAT_STEP_STAMINA := 0.06   # +6% slam absorption per tier
+
+const MOUNTAIN_UNLOCK_LEVELS: Dictionary = {
+	"alpine_valley": 1,
+	"rocky_ridge": 2,
+	"snow_mountain": 4,
+	"canyon_run": 6,
+	"extreme_summit": 8,
+}
+
+const SKIN_UNLOCK_LEVELS: Dictionary = {
+	"classic": 1,
+	"snow_phantom": 3,
+	"obsidian_ram": 5,
+	"golden_capra": 8,
+}
+
+const SKIN_COIN_COSTS: Dictionary = {
+	"classic": 0,
+	"snow_phantom": 0,
+	"obsidian_ram": 800,
+	"golden_capra": 2500,
+}
+

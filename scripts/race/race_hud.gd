@@ -123,13 +123,24 @@ func _process(_delta: float) -> void:
 	if r.finished and not _results_shown:
 		_results_shown = true
 		_res_title.text = "FINISH — %s" % r.time_str
+		var prog: Dictionary = r.get("progression", {})
+		var prog_text := ""
+		if not prog.is_empty():
+			prog_text = "\n +%d 🪙 (bank: %d)   +%d XP (Lvl %d)" % [
+				prog.get("coins_earned", 0), prog.get("total_coins", 0),
+				prog.get("xp_earned", 0), prog.get("new_level", 1),
+			]
+			if bool(prog.get("leveled_up", false)):
+				prog_text += "  ⭐ LEVEL UP!"
 		_res_detail.text = (
-			"best split %s\n top speed %.1f m/s\n crashes %d\n score %d ✦%s"
+			"best split %s\n top speed %.1f m/s\n crashes %d\n score %d ✦%s%s"
 			% [
 				r.best_split_str, r.top_speed, r.crashes, r.score,
 				(" — " + String(r.best_trick).replace("_", " ")) if r.best_trick != "" else "",
+				prog_text,
 			]
 		)
+		_res_hint.text = "R — race again  |  G — garage & upgrades"
 		_panel.visible = true
 		_refresh_rows(r)
 	elif r.finished and Time.get_ticks_msec() >= _next_refresh:

@@ -92,6 +92,66 @@ func _update_trick_spin(delta: float) -> void:
 		_trick_active = false  # full 360 → quaternion restored exactly
 
 
+var _current_skin: String = "classic"
+
+
+## Phase 10: applies horn and body skin materials.
+func apply_skin(skin_id: String) -> void:
+	_current_skin = skin_id
+	var horns := get_node_or_null("Head/Camera3D/Horns")
+	if horns != null and horns.has_method("apply_skin"):
+		horns.call("apply_skin", skin_id)
+
+	var torso := get_node_or_null("Body/Torso") as MeshInstance3D
+	var snout := get_node_or_null("Body/Snout") as MeshInstance3D
+	if torso != null and snout != null:
+		var mat := StandardMaterial3D.new()
+		match skin_id:
+			"snow_phantom":
+				mat.albedo_color = Color(0.96, 0.97, 1.0)
+				mat.roughness = 0.4
+			"obsidian_ram":
+				mat.albedo_color = Color(0.18, 0.18, 0.20)
+				mat.roughness = 0.6
+			"golden_capra":
+				mat.albedo_color = Color(0.98, 0.92, 0.75)
+				mat.roughness = 0.35
+			_:  # classic
+				mat.albedo_color = Color(0.70, 0.65, 0.58)
+				mat.roughness = 0.7
+		torso.material_override = mat
+		snout.material_override = mat
+
+
+func _get_speed_mult() -> float:
+	if _autopilot:
+		return 1.0
+	var p := get_node_or_null("/root/Progression")
+	return float(p.call("get_stat_multiplier", "speed")) if p != null else 1.0
+
+
+func _get_jump_mult() -> float:
+	if _autopilot:
+		return 1.0
+	var p := get_node_or_null("/root/Progression")
+	return float(p.call("get_stat_multiplier", "jump")) if p != null else 1.0
+
+
+func _get_grip_mult() -> float:
+	if _autopilot:
+		return 1.0
+	var p := get_node_or_null("/root/Progression")
+	return float(p.call("get_stat_multiplier", "grip")) if p != null else 1.0
+
+
+func _get_stamina_mult() -> float:
+	if _autopilot:
+		return 1.0
+	var p := get_node_or_null("/root/Progression")
+	return float(p.call("get_stat_multiplier", "stamina")) if p != null else 1.0
+
+
+
 func setup_spawn(t: Transform3D) -> void:
 	_spawn_transform = t
 	_spawn_set = true
@@ -138,6 +198,11 @@ func get_debug_state() -> Dictionary:
 		"grounded": is_on_floor(),
 		"tumbling": _tumbling,
 		"ai": _autopilot,
+		"speed_mult": _get_speed_mult(),
+		"jump_mult": _get_jump_mult(),
+		"grip_mult": _get_grip_mult(),
+		"stamina_mult": _get_stamina_mult(),
+		"skin": _current_skin,
 	}
 
 
@@ -145,6 +210,13 @@ func _ready() -> void:
 	_last_y = global_position.y
 	if get_parent() != null:
 		_terrain = get_parent().get_node_or_null("Terrain") as TerrainGenerator
+	if not _autopilot:
+		var p := get_node_or_null("/root/Progression")
+		if p != null:
+			var s: String = String(p.get("current_skin"))
+			if s != "":
+				apply_skin(s)
+
 
 
 func _physics_process(delta: float) -> void:
@@ -197,18 +269,23 @@ func _physics_process(delta: float) -> void:
 			authority = 0.0
 		elif _in_slide:
 			authority = 0.3
+		var speed_mult := _get_speed_mult()
+		var eff_move_speed := Config.MOVE_SPEED * speed_mult
+		var eff_move_accel := Config.MOVE_ACCEL * speed_mult
+		var eff_turn_rate := Config.TURN_RATE * _get_grip_mult()
+
 		if has_input and authority > 0.0:
 			# Carve: rotate the velocity heading toward the wish direction.
 			var wish_dir := wish2.normalized()
 			if _horiz.length() > 0.3:
 				var diff := wrapf(wish_dir.angle() - _horiz.angle(), -PI, PI)
-				var max_turn := Config.TURN_RATE * grip * authority * delta
+				var max_turn := eff_turn_rate * grip * authority * delta
 				_horiz = _horiz.rotated(clampf(diff, -max_turn, max_turn))
 			var along := _horiz.dot(wish_dir)
-			if along < Config.MOVE_SPEED:
+			if along < eff_move_speed:
 				_horiz += wish_dir * minf(
-					Config.MOVE_ACCEL * grip * authority * delta,
-					Config.MOVE_SPEED - along
+					eff_move_accel * grip * authority * delta,
+					eff_move_speed - along
 				)
 		else:
 			var brake := Config.FRICTION * grip * (0.3 if _in_slide else 1.0)
@@ -219,12 +296,14 @@ func _physics_process(delta: float) -> void:
 			var g_dir := Vector3.DOWN - floor_n * Vector3.DOWN.dot(floor_n)
 			_horiz += Vector2(g_dir.x, g_dir.z) * Config.GRAVITY * delta
 	else:
+		var air_accel := Config.MOVE_ACCEL * _get_speed_mult() * (Config.AIR_CONTROL * _get_jump_mult())
 		if has_input and _stumble <= 0.0 and not _tumbling:
-			_horiz += wish2.normalized() * (Config.MOVE_ACCEL * Config.AIR_CONTROL * delta)
+			_horiz += wish2.normalized() * (air_accel * delta)
 
 	var hs := _horiz.length()
-	if hs > Config.MAX_DOWNHILL_SPEED:
-		_horiz = _horiz / hs * Config.MAX_DOWNHILL_SPEED
+	var eff_max_downhill := Config.MAX_DOWNHILL_SPEED * _get_speed_mult()
+	if hs > eff_max_downhill:
+		_horiz = _horiz / hs * eff_max_downhill
 	velocity.x = _horiz.x
 	velocity.z = _horiz.y
 
@@ -235,7 +314,7 @@ func _physics_process(delta: float) -> void:
 		and _stumble <= 0.0
 		and not _tumbling
 	):
-		velocity.y = Config.JUMP_VELOCITY
+		velocity.y = Config.JUMP_VELOCITY * _get_jump_mult()
 		_jump_buffer = 0.0
 		_since_floor = Config.JUMP_COYOTE + 1.0  # consume — no double jump
 		EventBus.goat_jumped.emit(self)
@@ -249,8 +328,9 @@ func _physics_process(delta: float) -> void:
 	if not was_on_floor and is_on_floor():
 		var impact := maxf(0.0, -pre_vy)
 		EventBus.goat_landed.emit(impact, self)
-		if impact > Config.STUMBLE_IMPACT:
-			_stumble = Config.STUMBLE_TIME
+		var stam_mult := _get_stamina_mult()
+		if impact > (Config.STUMBLE_IMPACT * stam_mult):
+			_stumble = Config.STUMBLE_TIME / stam_mult
 
 	# Wall bonk: near-horizontal collision normal + enough speed into it
 	# (steep-but-climbable faces are floors via floor_max_angle, not bonks).
@@ -326,7 +406,7 @@ func _update_tumble(delta: float) -> void:
 				_body.quaternion = Quaternion.IDENTITY
 				_tumbling = false
 				_tumble_spin = 0.0
-				_stumble = Config.STUMBLE_TIME
+				_stumble = Config.STUMBLE_TIME / _get_stamina_mult()
 			return
 	_body.global_rotate(_tumble_axis, _tumble_spin * delta)
 
@@ -340,19 +420,21 @@ func _grip_at_feet() -> float:
 	if _terrain == null:
 		return 1.0
 	var surf := _terrain.surface_at(global_position.x, global_position.z)
+	var mult := _get_grip_mult()
 	match surf:
 		TerrainGenerator.Surface.ICE:
 			_surface_name = "ICE"
-			return Config.GRIP_ICE
+			return Config.GRIP_ICE * mult
 		TerrainGenerator.Surface.SNOW:
 			_surface_name = "SNOW"
-			return Config.GRIP_SNOW
+			return Config.GRIP_SNOW * mult
 		TerrainGenerator.Surface.ROCK:
 			_surface_name = "ROCK"
-			return Config.GRIP_ROCK
+			return Config.GRIP_ROCK * mult
 		_:
 			_surface_name = "GRASS"
-			return Config.GRIP_GRASS
+			return Config.GRIP_GRASS * mult
+
 
 
 func _state_name() -> String:

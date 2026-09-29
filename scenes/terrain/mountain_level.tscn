@@ -9,6 +9,8 @@
 [ext_resource type="Script" path="res://scripts/race/race_hud.gd" id="7_hud"]
 [ext_resource type="Script" path="res://scripts/terrain/obstacles.gd" id="8_obs"]
 [ext_resource type="Script" path="res://scripts/race/coins.gd" id="9_coins"]
+[ext_resource type="Script" path="res://scripts/ui/garage.gd" id="10_garage"]
+
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -57,3 +59,7 @@ script = ExtResource("6_race")
 
 [node name="RaceHUD" type="CanvasLayer" parent="."]
 script = ExtResource("7_hud")
+
+[node name="Garage" type="CanvasLayer" parent="."]
+script = ExtResource("10_garage")
+

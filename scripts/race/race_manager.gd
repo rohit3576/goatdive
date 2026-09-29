@@ -157,6 +157,7 @@ func get_race_state() -> Dictionary:
 		"best_trick": _best_trick,
 		"standings": _standings(),
 		"ai_states": _ai_states(),
+		"progression": _last_progression,
 	}
 
 
@@ -212,18 +213,54 @@ func _respawn_at(gate: Checkpoint) -> Transform3D:
 	)
 
 
+var _last_progression: Dictionary = {}
+
+
 func _player_finish() -> void:
 	_state = State.FINISHED
 	_player_time = _clock
 	_racers[0]["time"] = _clock
 	# Position bonus (Phase 9): style counts, but the podium prices in.
-	match _position_of(0):
+	var pos := _position_of(0)
+	var pos_bonus := 0
+	match pos:
 		1:
-			_score += 500
+			pos_bonus = 500
 		2:
-			_score += 250
+			pos_bonus = 250
 		3:
-			_score += 100
+			pos_bonus = 100
+	_score += pos_bonus
+
+	# Phase 10: Progression intake (Coins + XP).
+	var coins_node := get_parent().get_node_or_null("Coins")
+	var coins_collected: int = int(coins_node.call("collected_count")) if coins_node != null else 0
+	if _crashes == 0:
+		coins_collected += 20
+	match pos:
+		1:
+			coins_collected += 50
+		2:
+			coins_collected += 25
+		3:
+			coins_collected += 10
+
+	var xp_earned := int(round(float(_score) / 4.0)) + (200 if pos == 1 else (100 if pos == 2 else 50))
+	var p := get_node_or_null("/root/Progression")
+	var xp_result := {}
+	if p != null:
+		p.call("add_coins", coins_collected)
+		xp_result = p.call("add_xp", xp_earned) as Dictionary
+
+	_last_progression = {
+		"coins_earned": coins_collected,
+		"xp_earned": xp_earned,
+		"leveled_up": bool(xp_result.get("leveled_up", false)),
+		"new_level": int(xp_result.get("new_level", 1)),
+		"total_coins": int(p.get("coins")) if p != null else 0,
+		"total_xp": int(p.get("xp")) if p != null else 0,
+	}
+
 	EventBus.race_finished.emit(_clock)
 
 
