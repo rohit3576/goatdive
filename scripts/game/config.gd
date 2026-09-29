@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.10.0-phase10"
+const VERSION := "0.11.0-phase11"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -202,4 +202,13 @@ const SKIN_COIN_COSTS: Dictionary = {
 	"obsidian_ram": 800,
 	"golden_capra": 2500,
 }
+
+# Phase 11 — UI overhaul (plan: docs/plans/phase-11-ui.md). Numbers are
+# first guesses; F5 tunes the look, never the code (D10 pattern).
+const HUD_SPEEDO_MAX := 30.0  # m/s bar ceiling (above MAX_DOWNHILL_SPEED
+# purely so upgrades + fall speed don't pin the bar)
+const HUD_MINIMAP_SIZE := 176.0  # px card edge (square)
+const HUD_MINIMAP_PAD := 10.0  # px world→map inset margin
+const HUD_CHIP_PAD_X := 14.0  # px chip horizontal padding
+const HUD_TRICK_POP_SECS := 1.35  # s a trick label lives before fading
 

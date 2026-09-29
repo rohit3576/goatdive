@@ -19,6 +19,7 @@ var _clock := 0.0  # race clock — frozen only when every racer finished
 var _clock_running := false
 var _player_time := -1.0
 var _top_speed := 0.0
+var _player_speed := 0.0  # Phase 11: live speedometer feed (m/s, horizontal)
 var _crashes := 0
 var _wrong_way := false
 var _wrong_time := 0.0
@@ -107,7 +108,8 @@ func _player_tick(delta: float) -> void:
 		return
 	var player := _racers[0]["node"] as GoatController
 	var d := player.get_debug_state()
-	_top_speed = maxf(_top_speed, float(d["speed"]))
+	_player_speed = float(d["speed"])
+	_top_speed = maxf(_top_speed, _player_speed)
 	GameState.race_time = _clock
 	_update_wrong_way(delta)
 
@@ -120,7 +122,7 @@ func get_race_state() -> Dictionary:
 			"time": 0.0, "time_str": "0:00.00", "gates_passed": 0,
 			"gate_count": _gates.size(), "dist_to_finish": 0.0,
 			"position": 1, "racers": 0, "wrong_way": false,
-			"top_speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
+			"top_speed": 0.0, "speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
 			"best_split_str": "—", 			"finished": false, "standings": [],
 			"score": 0, "best_trick": "",
 			"ai_states": [],
@@ -145,6 +147,7 @@ func get_race_state() -> Dictionary:
 		"racers": _racers.size(),
 		"wrong_way": _wrong_way,
 		"top_speed": _top_speed,
+		"speed": _player_speed,
 		"crashes": _crashes,
 		"hits": int(_racers[0]["hits"]),  # player's corridor-obstacle hits (D8)
 		"splits": splits,
@@ -204,6 +207,35 @@ func gate_progress_for(node: Node) -> int:
 ## Player identity check (HUD trick labels filter on this).
 func is_player(node: Node) -> bool:
 	return not _racers.is_empty() and node == _racers[0]["node"]
+
+
+## Phase 11 minimap feed (plan D8): one marker per racer — name, XZ world
+## position, player flag, finish flag, profile color. The HUD never walks
+## racer nodes; this is the whole surface it needs.
+func get_racer_markers() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for rec in _racers:
+		var node := rec["node"] as GoatController
+		out.append({
+			"name": String(rec["name"]),
+			"pos": node.global_position,
+			"yaw": node.rotation.y,
+			"is_player": rec == _racers[0],
+			"finished": bool(rec["finished"]),
+			"color": _profile_color(String(rec["name"])),
+		})
+	return out
+
+
+func _profile_color(name: String) -> Color:
+	match name:
+		"CAUTIOUS":
+			return Config.AI_COLOR_CAUTIOUS
+		"BOLD":
+			return Config.AI_COLOR_BOLD
+		"RECKLESS":
+			return Config.AI_COLOR_RECKLESS
+	return HudTheme.GOLD
 
 
 func _respawn_at(gate: Checkpoint) -> Transform3D:

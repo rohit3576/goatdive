@@ -26,6 +26,7 @@ var _skin_buttons: Dictionary = {}
 
 func _ready() -> void:
 	layer = 100
+	process_mode = Node.PROCESS_MODE_ALWAYS  # Phase 11: usable while paused
 	_mountain_ids = MountainCatalog.get_all_ids()
 	_sync_current_mountain_index()
 	_build_ui()
@@ -81,11 +82,12 @@ func close_garage() -> void:
 func _build_ui() -> void:
 	# Dimmed background backdrop.
 	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.06, 0.08, 0.85)
+	bg.color = Color(0.03, 0.05, 0.07, 0.88)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
 	_panel = PanelContainer.new()
+	_panel.add_theme_stylebox_override("panel", HudTheme.panel())
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 32)
@@ -122,8 +124,7 @@ func _build_ui() -> void:
 
 	var carousel_row := HBoxContainer.new()
 	carousel_row.add_theme_constant_override("separation", 12)
-	var prev_btn := Button.new()
-	prev_btn.text = " ◀ "
+	var prev_btn := _make_button(" ◀ ")
 	prev_btn.pressed.connect(_prev_mountain)
 	carousel_row.add_child(prev_btn)
 
@@ -137,12 +138,11 @@ func _build_ui() -> void:
 	mtn_info.add_child(_mountain_stats_lbl)
 	carousel_row.add_child(mtn_info)
 
-	var next_btn := Button.new()
-	next_btn.text = " ▶ "
+	var next_btn := _make_button(" ▶ ")
 	next_btn.pressed.connect(_next_mountain)
 	carousel_row.add_child(next_btn)
 
-	_mountain_select_btn = Button.new()
+	_mountain_select_btn = _make_button("SELECT")
 	_mountain_select_btn.custom_minimum_size = Vector2(160, 42)
 	_mountain_select_btn.pressed.connect(_select_mountain)
 	carousel_row.add_child(_mountain_select_btn)
@@ -174,7 +174,7 @@ func _build_ui() -> void:
 		_stat_labels[st] = lbl
 		stat_row.add_child(lbl)
 
-		var btn := Button.new()
+		var btn := _make_button("")
 		btn.custom_minimum_size = Vector2(110, 30)
 		btn.pressed.connect(_buy_upgrade.bind(st))
 		_stat_buttons[st] = btn
@@ -204,7 +204,7 @@ func _build_ui() -> void:
 		s_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		skin_row.add_child(s_lbl)
 
-		var s_btn := Button.new()
+		var s_btn := _make_button("")
 		s_btn.custom_minimum_size = Vector2(110, 30)
 		s_btn.pressed.connect(_select_or_buy_skin.bind(s_id))
 		_skin_buttons[s_id] = s_btn
@@ -224,20 +224,19 @@ func _build_ui() -> void:
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.add_child(hint)
 
-	var race_btn := Button.new()
-	race_btn.text = "  🏁 RACE MOUNTAIN  "
+	var race_btn := _make_button("  🏁 RACE MOUNTAIN  ", true)
 	race_btn.custom_minimum_size = Vector2(180, 44)
 	race_btn.pressed.connect(_on_race_pressed)
 	footer.add_child(race_btn)
 	root_col.add_child(footer)
 
 
+func _make_button(text: String, hot := false) -> Button:
+	return HudTheme.styled_button(text, hot)
+
+
 func _make_label(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	return l
+	return HudTheme.label(text, size, color)
 
 
 # --- Refresh Logic -----------------------------------------------------------
@@ -365,6 +364,7 @@ func _select_or_buy_skin(skin_id: String) -> void:
 
 func _on_race_pressed() -> void:
 	close_garage()
+	get_tree().paused = false  # Phase 11: paused-reload trap (plan risk table)
 	# Reload current scene with selected mountain.
 	get_tree().reload_current_scene()
 

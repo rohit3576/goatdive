@@ -1,6 +1,8 @@
 extends Node3D
-## Bootstrap: mounts the default level and wires pause/restart.
+## Bootstrap: mounts the default level and wires restart.
 ## No gameplay here — goat controller owns movement.
+## Phase 11: Esc/pause moved to the HUD pause menu (docs/plans/phase-11-ui.md
+## D7) — this scaffold released the mouse; the menu owns it now.
 
 const SceneLoader := preload("res://scripts/game/scene_loader.gd")
 const LEVEL := "res://scenes/terrain/mountain_level.tscn"
@@ -16,11 +18,5 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause"):
-		Input.mouse_mode = (
-			Input.MOUSE_MODE_VISIBLE
-			if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			else Input.MOUSE_MODE_CAPTURED
-		)
-	elif event.is_action_pressed("restart"):
+	if event.is_action_pressed("restart"):
 		get_tree().reload_current_scene()
