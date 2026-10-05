@@ -95,6 +95,13 @@ func _ready() -> void:
 	if race != null:
 		race.begin(racers)
 
+	# Phase 12: effects/weather listener — code-mounted (TrickDetector
+	# precedent); consumes the same EventBus vocabulary as the audio
+	# director, writes nothing back (plan D2).
+	var fx := EffectsSpawner.new()
+	fx.name = "EffectsSpawner"
+	add_child(fx)
+
 
 func _spawn_ai(
 	terrain: TerrainGenerator, spawn: Vector3, fwd: Vector3, slot: Dictionary

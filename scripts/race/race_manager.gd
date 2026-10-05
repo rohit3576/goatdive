@@ -20,6 +20,12 @@ var _clock_running := false
 var _player_time := -1.0
 var _top_speed := 0.0
 var _player_speed := 0.0  # Phase 11: live speedometer feed (m/s, horizontal)
+# Phase 12: poll-surface extensions (plan Step 4) — footsteps, wind, fall
+# rush and weather all read the manager snapshot, never racer nodes.
+var _player_grounded := false
+var _player_surface := "ROCK"
+var _player_vy := 0.0
+var _player_alt := 0.0
 var _crashes := 0
 var _wrong_way := false
 var _wrong_time := 0.0
@@ -109,6 +115,10 @@ func _player_tick(delta: float) -> void:
 	var player := _racers[0]["node"] as GoatController
 	var d := player.get_debug_state()
 	_player_speed = float(d["speed"])
+	_player_grounded = bool(d["grounded"])
+	_player_surface = String(d["surface"])
+	_player_vy = float(d["vy_world"])
+	_player_alt = player.global_position.y
 	_top_speed = maxf(_top_speed, _player_speed)
 	GameState.race_time = _clock
 	_update_wrong_way(delta)
@@ -126,6 +136,7 @@ func get_race_state() -> Dictionary:
 			"best_split_str": "—", 			"finished": false, "standings": [],
 			"score": 0, "best_trick": "",
 			"ai_states": [],
+			"grounded": false, "surface": "ROCK", "alt": 0.0, "vy": 0.0,
 		}
 	var player: Dictionary = _racers[0]
 	var splits: Array = player["splits"]
@@ -161,6 +172,10 @@ func get_race_state() -> Dictionary:
 		"standings": _standings(),
 		"ai_states": _ai_states(),
 		"progression": _last_progression,
+		"grounded": _player_grounded,
+		"surface": _player_surface,
+		"alt": _player_alt,
+		"vy": _player_vy,
 	}
 
 

@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.11.0-phase11"
+const VERSION := "0.12.0-phase12"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -211,4 +211,41 @@ const HUD_MINIMAP_SIZE := 176.0  # px card edge (square)
 const HUD_MINIMAP_PAD := 10.0  # px world→map inset margin
 const HUD_CHIP_PAD_X := 14.0  # px chip horizontal padding
 const HUD_TRICK_POP_SECS := 1.35  # s a trick label lives before fading
+
+# Phase 12 — audio & effects (plan: docs/plans/phase-12-audio-fx.md).
+# Listener-layer numbers only: nothing here touches physics — the gauntlet
+# must stay bit-identical across this phase (plan D2).
+const SFX_VOL_MUSIC_DB := -7.0  # Music bus ceiling
+const SFX_VOL_SFX_DB := -3.0  # one-shots bus
+const SFX_VOL_AMBIENCE_DB := -13.0  # wind / fall-rush bus
+const SFX_POOL_SIZE := 8  # simultaneous one-shot voices
+const SFX_PITCH_JITTER := 0.07  # ± fraction — anti-machine-gun
+const MUSIC_FADE := 1.6  # 1/s crossfade lerp (calm ↔ drive)
+const FOOT_MIN_SPEED := 1.5  # m/s below which the goat is "standing"
+const FOOT_STRIDE_M := 2.35  # m of horizontal travel per footfall
+const FOOT_SURFACE_PITCH: Dictionary = {
+	# The placeholder bank is timbre-neutral; pitch carries the surface.
+	"ROCK": 1.0, "GRASS": 0.94, "SNOW": 0.82, "ICE": 0.76,
+}
+const FALL_RUSH_VY := -11.0  # m/s fall speed that triggers the whoosh
+const WIND_MAX_DB := -9.0  # ambience ceiling at full speed/altitude
+
+const FX_LAND_PARTICLES := 26  # dust burst ceiling at STUMBLE_IMPACT
+const FX_BONK_PARTICLES := 16
+const FX_COIN_PARTICLES := 12
+const FX_GATE_PARTICLES := 20
+const FX_LIFETIME := 0.9  # s one-shot emitter lifetime (free follows)
+
+const WEATHER_SNOW_COUNT: Dictionary = {
+	# Per-mountain snowfall density (0 = never snows there).
+	"alpine_valley": 36, "rocky_ridge": 28, "snow_mountain": 110,
+	"canyon_run": 0, "extreme_summit": 90,
+}
+const WEATHER_DUST_COUNT: Dictionary = {
+	# Canyon grit — always on, no snow line applies.
+	"canyon_run": 60,
+}
+const WEATHER_SNOW_BAND := 12.0  # m hysteresis around the snow line
+const STREAK_MIN_SPEED := 17.0  # m/s where air streaks fade in (85% max)
+const STREAK_MAX_PARTICLES := 70  # alive at MAX_DOWNHILL_SPEED
 
