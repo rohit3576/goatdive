@@ -43,6 +43,10 @@ func _apply_mountain_preset() -> void:
 		terrain.band_height = float(preset.get("band_height", 10.0))
 		terrain.band_tread = float(preset.get("band_tread", 0.5))
 		terrain.band_rise = float(preset.get("band_rise", 0.35))
+		# Phase 13 D6: terrain density by quality profile. Desktop HIGH
+		# reads grid_high=192 — byte-identical to every earlier phase.
+		var grid_key := "grid_high" if String(Config.QUALITY) == "HIGH" else "grid_low"
+		terrain.grid = int(preset.get(grid_key, 192))
 
 	var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if we != null and we.environment != null:
@@ -56,6 +60,16 @@ func _ready() -> void:
 	var z := SPAWN_OFFSET.y
 	var h: float = terrain.get_height_at(x, z)
 	var spawn := Vector3(x, h + 1.2, z)
+
+	# Phase 13 D5: shared XZ spatial index over the static race world
+	# (obstacles + coins) — mounted FIRST so brains and the trick detector
+	# can grab it eagerly in their own _ready. Falls back to brute-force
+	# scans in harness levels that never mount one.
+	var SpatialIndex := preload("res://scripts/race/spatial_grid.gd")
+	var index := SpatialIndex.new()
+	index.name = "SpatialIndex"
+	index.build_from_level(self)
+	add_child(index)
 
 	# Player first — their camera becomes the current one.
 	var goat := GOAT.instantiate() as GoatController

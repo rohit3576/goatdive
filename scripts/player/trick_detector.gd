@@ -14,7 +14,9 @@ var _goat: GoatController
 var _course: CourseBuilder
 var _logs: Array = []  # log records (segment obstacles — D9)
 var _near: Array = []  # ALL obstacle records (near-miss candidates)
-var _near_cd: PackedInt64Array = []  # per-record cooldown, msec
+var _near_cd: PackedInt64Array = []  # per-record cooldown, msec (no grid)
+var _near_cd_grid := {}  # grid-id cooldown, msec (Phase 13 D5 path)
+var _grid: Node = null  # SpatialIndex (duck-typed) — Phase 13 D5
 var _near_count := 0
 var _pending: Array = []  # {i, at} band entries awaiting hit-retraction
 var _hit_lock := 0  # msec — suppress scoring right after a hit
@@ -50,6 +52,7 @@ func _ready() -> void:
 			_near.append_array(obs.get_obstacles(kind))
 		_near_cd.resize(_near.size())
 		_near_cd.fill(0)
+	_grid = level.get_node_or_null("SpatialIndex")  # Phase 13 D5
 	EventBus.goat_jumped.connect(_on_jump)
 	EventBus.goat_landed.connect(_on_landed)
 	EventBus.goat_bonked.connect(_on_bonk)
@@ -67,7 +70,7 @@ func _physics_process(delta: float) -> void:
 	var back_now := Input.is_action_pressed("trick_back")
 	if _in_air:
 		_t += delta
-		var d := _goat.get_debug_state()
+		var d := _goat.get_motion_state()  # Phase 13 Step 4: speed only
 		_max_speed = maxf(_max_speed, float(d["speed"]))
 		_peak_y = maxf(_peak_y, _goat.global_position.y)
 		# Accumulate wrapped body-yaw delta (the mouse-spin channel).
@@ -79,17 +82,14 @@ func _physics_process(delta: float) -> void:
 		# Rotation trick input: one flip per air window (D2).
 		if _flip == "" and not _voided:
 			if front_now and not _prev_front:
-				if _t < 1.0:
-					print("EDGE front t=%.2f" % _t)
 				_begin_flip("front")
 			elif back_now and not _prev_back:
 				_begin_flip("back")
-		if _t < 0.5 and Engine.get_physics_frames() % 15 == 0:
-			print("INP t=%.2f front=%s prev=%s air=%s" % [_t, front_now, _prev_front, _in_air])
 		if _flip != "":
 			_flip_t += delta
 		# Log-jump proximity (D9): within the crossing band of any log
 		# segment — scored on a clean close (a hit voids anyway).
+		# (2 records — the grid earns nothing here; brute stays.)
 		if not _log_pass:
 			var px := _goat.global_position.x
 			var pz := _goat.global_position.z
@@ -113,6 +113,8 @@ func _physics_process(delta: float) -> void:
 ## Near miss (D9/D10): inside the band at speed, scored DEFERRED — a hit
 ## on any obstacle within 0.7 s of band entry retracts the payout (a hit
 ## is not a near miss; 0.7 s covers an 8 m approach's entry→impact gap).
+## Phase 13 D5: candidates come from the shared XZ grid when mounted
+## (cooldown keyed by stable grid id); the band test itself is unchanged.
 func _near_miss_tick() -> void:
 	var now := Time.get_ticks_msec()
 	# Retract/expire pending entries.
@@ -129,25 +131,44 @@ func _near_miss_tick() -> void:
 		_pending = still
 	if now < _hit_lock:
 		return
-	var d := _goat.get_debug_state()
+	var d := _goat.get_motion_state()  # Phase 13 Step 4: speed only
 	if float(d["speed"]) < Config.TRICK_NEAR_MISS_SPEED:
 		return
 	var px := _goat.global_position.x
 	var pz := _goat.global_position.z
+	if _grid != null:
+		var ids: PackedInt64Array = _grid.call(
+			"query_ids",
+			Vector2(px, pz),
+			Config.TRICK_NEAR_MISS_R + Config.GRID_QUERY_MARGIN,
+			0
+		)
+		for id in ids:
+			if now < int(_near_cd_grid.get(id, 0)):
+				continue
+			if _band_hit(_grid.call("get_record", id), px, pz):
+				_near_cd_grid[id] = now + int(Config.TRICK_NEAR_MISS_CD * 1000.0)
+				_pending.append({"i": id, "at": now})
+		return
 	for i in _near.size():
 		if now < _near_cd[i]:
 			continue
-		var r: Dictionary = _near[i]
-		var op: Vector3 = r["pos"]
-		var to := Vector2(op.x - px, op.z - pz)
-		var dist := to.length()
-		if r.has("axis"):
-			var ax: Vector3 = r["axis"]
-			var s := clampf(-to.dot(Vector2(ax.x, ax.z)), -float(r["half_len"]), float(r["half_len"]))
-			dist = (to + Vector2(ax.x, ax.z) * s).length()
-		if dist - float(r["r"]) <= Config.TRICK_NEAR_MISS_R:
+		if _band_hit(_near[i], px, pz):
 			_near_cd[i] = now + int(Config.TRICK_NEAR_MISS_CD * 1000.0)
 			_pending.append({"i": i, "at": now})
+
+
+## The D9 band test, shared by both candidate paths: surface distance
+## (segment-projected for logs) within TRICK_NEAR_MISS_R.
+func _band_hit(rec: Dictionary, px: float, pz: float) -> bool:
+	var op: Vector3 = rec["pos"]
+	var to := Vector2(op.x - px, op.z - pz)
+	var dist := to.length()
+	if rec.has("axis"):
+		var ax: Vector3 = rec["axis"]
+		var s := clampf(-to.dot(Vector2(ax.x, ax.z)), -float(rec["half_len"]), float(rec["half_len"]))
+		dist = (to + Vector2(ax.x, ax.z) * s).length()
+	return dist - float(rec["r"]) <= Config.TRICK_NEAR_MISS_R
 
 
 func _on_obstacle_hit(_impact: float, goat: Node3D) -> void:

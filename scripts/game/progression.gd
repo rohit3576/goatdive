@@ -3,10 +3,18 @@ extends Node
 ## Manages persistent player progression: coins, XP, levels, stat upgrades,
 ## unlocked mountains, and equipped goat skins.
 ## Backed by ConfigFile at Config.SAVE_PATH (user://progression.cfg).
+##
+## Phase 13 D7: saves are DEBOUNCED — mutations mark dirty and flush at
+## most SAVE_DEBOUNCE_S later; purchases/unlocks/finish/exit flush now.
+## Mid-race only the finish banks currency, so the loss window is bounded
+## and tiny (≤2 s of a menu selection, recovered by tree_exiting anyway).
 
 var coins: int = 0
 var xp: int = 0
 var level: int = 1
+
+var _dirty := false
+var _dirty_since := 0.0
 
 # Stat upgrade tiers: 0 to Config.UPGRADE_MAX_TIER (5).
 var upgrades: Dictionary = {
@@ -27,6 +35,37 @@ func _ready() -> void:
 	load_from_disk()
 
 
+func _process(_delta: float) -> void:
+	# The debounce pump: nothing to do on the overwhelmingly common frame.
+	if _dirty and Time.get_ticks_msec() - _dirty_since >= int(Config.SAVE_DEBOUNCE_S * 1000.0):
+		save_to_disk()
+
+
+func _mark_dirty() -> void:
+	if not _dirty:
+		_dirty = true
+		_dirty_since = Time.get_ticks_msec()  # window opens at FIRST mutation
+
+
+func _exit_tree() -> void:
+	# Bounded loss (plan D7): whatever a debounce window held dies with a
+	# clean flush at shutdown, not with the process.
+	if _dirty:
+		save_to_disk()
+
+
+## Forced flush for the points that must not wait (finish intake,
+## purchases, unlocks): write now if anything is pending.
+func flush_now() -> void:
+	if _dirty:
+		save_to_disk()
+
+
+## True when a mutation is still inside the debounce window (smoke).
+func is_dirty() -> bool:
+	return _dirty
+
+
 func _bus() -> Node:
 	return get_node_or_null("/root/EventBus")
 
@@ -41,7 +80,7 @@ func add_coins(amount: int) -> void:
 	var b := _bus()
 	if b != null and b.has_signal("coins_changed"):
 		b.emit_signal("coins_changed", coins, amount)
-	save_to_disk()
+	_mark_dirty()  # Ph13 D7: banked at finish via flush_now, ≤2 s window
 
 
 func spend_coins(amount: int) -> bool:
@@ -53,7 +92,7 @@ func spend_coins(amount: int) -> bool:
 	var b := _bus()
 	if b != null and b.has_signal("coins_changed"):
 		b.emit_signal("coins_changed", coins, -amount)
-	save_to_disk()
+	_mark_dirty()  # purchases flush immediately right after (buy_*)
 	return true
 
 
@@ -80,7 +119,7 @@ func add_xp(amount: int) -> Dictionary:
 		if b != null and b.has_signal("level_up"):
 			b.emit_signal("level_up", level)
 
-	save_to_disk()
+	_mark_dirty()  # finish intake calls flush_now right after (Ph13 D7)
 	return {
 		"leveled_up": leveled_up,
 		"old_level": old_lvl,
@@ -182,7 +221,7 @@ func set_current_mountain(mountain_id: String) -> bool:
 	if not is_mountain_unlocked(mountain_id):
 		return false
 	current_mountain = mountain_id
-	save_to_disk()
+	_mark_dirty()  # Ph13 D7
 	return true
 
 
@@ -218,7 +257,7 @@ func set_current_skin(skin_id: String) -> bool:
 	if not is_skin_unlocked(skin_id):
 		return false
 	current_skin = skin_id
-	save_to_disk()
+	_mark_dirty()  # Ph13 D7
 	return true
 
 
@@ -258,6 +297,7 @@ func save_to_disk() -> bool:
 	cfg.set_value("skins", "current", current_skin)
 
 	var err := cfg.save(Config.SAVE_PATH)
+	_dirty = false  # Ph13 D7: whatever was pending is on disk
 	return err == OK
 
 

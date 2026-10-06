@@ -16,6 +16,7 @@ var profile := "BOLD"  # "CAUTIOUS" / "BOLD" / "RECKLESS"
 var _goat: GoatController
 var _course: CourseBuilder
 var _terrain: TerrainGenerator
+var _mgr: RaceManager  # Phase 13 Step 4: cached (was a group scan per tick)
 var _idx := 0  # nearest polyline index — advance-only
 var _wish := Vector2.ZERO  # smoothed body-local input
 var _stuck := 0.0
@@ -26,8 +27,12 @@ var _racing := false
 
 # Phase 8 Step 2: corridor obstacle records (pines + rocks + logs) for the
 # avoidance probe — the same game-side truth the colliders were built from.
+# Phase 13 D5: when the level's SpatialIndex is mounted, the per-tick
+# candidate set comes from the shared XZ grid (O(cell)) and _obs is the
+# no-index fallback only.
 var _obs: Array = []
 var _av_count := 0  # records inside the forward cone (F3)
+var _grid: Node = null  # SpatialIndex (duck-typed)
 
 
 func _ready() -> void:
@@ -39,6 +44,7 @@ func _ready() -> void:
 	if obs != null:
 		for kind in ["pines", "rocks", "logs"]:
 			_obs.append_array(obs.get_obstacles(kind))
+	_grid = level.get_node_or_null("SpatialIndex")
 	_goat.set_autopilot(true)
 	EventBus.race_started.connect(func() -> void: _racing = true)
 	EventBus.race_finished.connect(func(_t: float) -> void: _racing = false)
@@ -74,16 +80,18 @@ func _physics_process(delta: float) -> void:
 
 	# --- Obstacle avoidance (Phase 8 Step 2, plan D1/D8): steer away from
 	#     the nearest corridor record inside the forward cone. Record-based
-	#     — no physics queries; a few hundred cheap checks per tick.
+	#     — no physics queries; the Phase 13 shared grid pre-filters the
+	#     candidates (strict superset), the precise test below is unchanged.
 	#     Strength ∝ closeness (1/d), clamped; logs are avoid-first (the
 	#     brain plans no jumps here — the ledge probe stays the only jump
 	#     trigger). Applied to dir BEFORE the yaw/body decomposition, so
 	#     AI_WISH_SMOOTH still rounds the corner (no zigzag fight). ---
 	_av_count = 0
-	if not _obs.is_empty():
+	var cands := _avoid_candidates(pos)
+	if not cands.is_empty():
 		var threat_d := INF
 		var threat_off := Vector2.ZERO  # offset to the threat's CLOSEST point
-		for o in _obs:
+		for o in cands:
 			var rec: Dictionary = o
 			var op: Vector3 = rec["pos"]
 			var to := Vector2(op.x - pos.x, op.z - pos.z)
@@ -133,7 +141,7 @@ func _physics_process(delta: float) -> void:
 	var input := Vector2(right.dot(Vector3(dir.x, 0.0, dir.y)), -fwd.dot(Vector3(dir.x, 0.0, dir.y)))
 
 	# --- Speed shaping: lift off above the skill cap (physics coasts). ---
-	var d_goat := _goat.get_debug_state()
+	var d_goat := _goat.get_motion_state()
 	if float(d_goat["speed"]) > _speed_cap():
 		input = Vector2.ZERO
 
@@ -157,7 +165,9 @@ func _physics_process(delta: float) -> void:
 	#      past a slab; order enforcement then blocks all later gates and
 	#      the goat can never finish — the Phase 7 deadlock)
 	# Rescue lands 6 m BEFORE the racer's current gate (never past it).
-	var mgr := get_tree().get_first_node_in_group("race_manager")
+	if _mgr == null or not is_instance_valid(_mgr):
+		_mgr = get_tree().get_first_node_in_group("race_manager") as RaceManager
+	var mgr := _mgr
 	if float(d_goat["speed"]) < Config.AI_STUCK_SPEED:
 		_stuck += delta
 	else:
@@ -196,6 +206,25 @@ func get_debug_state() -> Dictionary:
 		"teleports": _teleports,
 		"avoid": _av_count,
 	}
+
+
+## Phase 13 D5: avoidance candidates — grid query (obstacle-kind records
+## near the goat) when the level index is mounted, the full record list
+## otherwise. The grid result is a strict superset of every record the
+## cone test below can accept at AI_AVOID_R, so behavior is identical.
+func _avoid_candidates(pos: Vector3) -> Array:
+	if _grid == null:
+		return _obs
+	var out: Array = []
+	var ids: PackedInt64Array = _grid.call(
+		"query_ids",
+		Vector2(pos.x, pos.z),
+		Config.AI_AVOID_R + Config.GRID_QUERY_MARGIN,
+		0
+	)
+	for id in ids:
+		out.append(_grid.call("get_record", id))
+	return out
 
 
 func _gate_from_idx() -> int:

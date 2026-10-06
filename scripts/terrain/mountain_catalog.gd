@@ -7,6 +7,11 @@ extends RefCounted
 ## 3. Snow Mountain (Seed 4096) — Advanced (Ice / Low Grip)
 ## 4. Canyon Run (Seed 8192) — Expert (High Warp / Steep Gorges)
 ## 5. Extreme Summit (Seed 9999) — Master (Maximum Vertical Drop)
+##
+## Phase 13 D6: grid_high/grid_low are the per-mountain terrain density
+## overrides. HIGH (192) is the untouched desktop default — the gauntlet's
+## physics path; LOW (128) halves trimesh tris for the web candidate.
+## Per-mountain tuning to 96 lands with Phase 14's on-device numbers.
 
 const MOUNTAINS: Dictionary = {
 	"alpine_valley": {
@@ -14,6 +19,8 @@ const MOUNTAINS: Dictionary = {
 		"name": "Alpine Valley",
 		"subtitle": "Rolling green meadows & gentle fall lines",
 		"seed_value": 1337,
+		"grid_high": 192,
+		"grid_low": 128,
 		"peak_height": 260.0,
 		"snow_line": 170.0,
 		"warp_strength": 60.0,
@@ -32,6 +39,8 @@ const MOUNTAINS: Dictionary = {
 		"name": "Rocky Ridge",
 		"subtitle": "Jagged granite ledges & steep cliff bands",
 		"seed_value": 2048,
+		"grid_high": 192,
+		"grid_low": 128,
 		"peak_height": 290.0,
 		"snow_line": 190.0,
 		"warp_strength": 85.0,
@@ -50,6 +59,8 @@ const MOUNTAINS: Dictionary = {
 		"name": "Snow Mountain",
 		"subtitle": "Glaciated alpine descent with low-friction ice",
 		"seed_value": 4096,
+		"grid_high": 192,
+		"grid_low": 128,
 		"peak_height": 275.0,
 		"snow_line": 90.0,
 		"warp_strength": 65.0,
@@ -68,6 +79,8 @@ const MOUNTAINS: Dictionary = {
 		"name": "Canyon Run",
 		"subtitle": "Deep cut gorges and high-commitment chutes",
 		"seed_value": 8192,
+		"grid_high": 192,
+		"grid_low": 128,
 		"peak_height": 310.0,
 		"snow_line": 220.0,
 		"warp_strength": 110.0,
@@ -86,6 +99,8 @@ const MOUNTAINS: Dictionary = {
 		"name": "Extreme Summit",
 		"subtitle": "Maximum vertical drop & technical choke points",
 		"seed_value": 9999,
+		"grid_high": 192,
+		"grid_low": 128,
 		"peak_height": 340.0,
 		"snow_line": 140.0,
 		"warp_strength": 95.0,

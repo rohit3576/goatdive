@@ -76,7 +76,7 @@ func _process(delta: float) -> void:
 		return
 
 	var dt := minf(delta, 0.05)  # clamp — window-drag spikes must not explode springs
-	var d := _goat.get_debug_state()
+	var d := _goat.get_motion_state()  # Phase 13 Step 4: lean hot-path snapshot
 	var speed: float = d.speed
 	var vel: Vector2 = d.vel
 	var grounded: bool = d.grounded

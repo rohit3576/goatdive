@@ -12,6 +12,12 @@ extends CharacterBody3D
 var _spawn_transform := Transform3D()
 var _spawn_set := false
 
+# Phase 13 probe surface (plan D9): exact /root/Progression lookup count.
+var perf_progression_lookups := 0
+# Phase 13 (plan Step 4): the Progression autoload resolved once per goat.
+var _progression: Node = null
+var _progression_resolved := false
+
 # Phase 6 countdown lock (plan D3): zero input authority — physics keeps
 # simulating (the goat settles on spawn); movement math untouched.
 var _input_enabled := true
@@ -123,31 +129,43 @@ func apply_skin(skin_id: String) -> void:
 		snout.material_override = mat
 
 
+func _progression_node() -> Node:
+	# Phase 13 (plan Step 4): resolve the autoload ONCE per goat — the old
+	# per-call path lookup ran ~1,300×/sec across the herd (probe-measured).
+	# The Progression autoload never changes identity at runtime, so the
+	# cached ref is exact; the counter is the probe surface.
+	if not _progression_resolved:
+		_progression_resolved = true
+		_progression = get_node_or_null("/root/Progression")
+		perf_progression_lookups += 1
+	return _progression
+
+
 func _get_speed_mult() -> float:
 	if _autopilot:
 		return 1.0
-	var p := get_node_or_null("/root/Progression")
+	var p := _progression_node()
 	return float(p.call("get_stat_multiplier", "speed")) if p != null else 1.0
 
 
 func _get_jump_mult() -> float:
 	if _autopilot:
 		return 1.0
-	var p := get_node_or_null("/root/Progression")
+	var p := _progression_node()
 	return float(p.call("get_stat_multiplier", "jump")) if p != null else 1.0
 
 
 func _get_grip_mult() -> float:
 	if _autopilot:
 		return 1.0
-	var p := get_node_or_null("/root/Progression")
+	var p := _progression_node()
 	return float(p.call("get_stat_multiplier", "grip")) if p != null else 1.0
 
 
 func _get_stamina_mult() -> float:
 	if _autopilot:
 		return 1.0
-	var p := get_node_or_null("/root/Progression")
+	var p := _progression_node()
 	return float(p.call("get_stat_multiplier", "stamina")) if p != null else 1.0
 
 
@@ -206,12 +224,30 @@ func get_debug_state() -> Dictionary:
 	}
 
 
+## Phase 13 hot-path accessor (plan Step 4): the motion fields the camera,
+## AI brains, trick detector and manager tick poll every frame — same
+## values as get_debug_state(), without the four mult reads and skin entry
+## (mults stay live-read where physics uses them; only cold paths pay).
+func get_motion_state() -> Dictionary:
+	return {
+		"speed": Vector2(velocity.x, velocity.z).length(),
+		"vel": Vector2(velocity.x, velocity.z),
+		"grounded": is_on_floor(),
+		"surface": _surface_name,
+		"slope": _floor_slope_deg,
+		"state": _state_name(),
+		"vy": velocity.y,
+		"vy_world": _vy_world,
+		"floor_n": _floor_n,
+	}
+
+
 func _ready() -> void:
 	_last_y = global_position.y
 	if get_parent() != null:
 		_terrain = get_parent().get_node_or_null("Terrain") as TerrainGenerator
 	if not _autopilot:
-		var p := get_node_or_null("/root/Progression")
+		var p := _progression_node()
 		if p != null:
 			var s: String = String(p.get("current_skin"))
 			if s != "":

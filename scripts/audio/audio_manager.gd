@@ -42,6 +42,7 @@ var _stride_acc := 0.0
 var _fall_armed := true
 var _last_beep := -1
 var _prev_race_state := ""
+var _mgr: Node = null  # RaceManager (duck-typed) — Phase 13 Step 4: cached
 
 # F3 / smoke observability (repo debug-state pattern).
 var _one_shots := 0
@@ -212,8 +213,9 @@ func _on_unlock(_id: String) -> void:
 ## Player-only guard (plan D8). No manager (menu / smoke / synthetic emit)
 ## → treat as player: the smoke battery drives these paths directly.
 func _is_player(goat: Node3D) -> bool:
-	var mgr := get_tree().get_first_node_in_group("race_manager")
-	return mgr == null or (mgr as Node).call("is_player", goat)
+	if _mgr == null or not is_instance_valid(_mgr):
+		_mgr = get_tree().get_first_node_in_group("race_manager")
+	return _mgr == null or _mgr.call("is_player", goat)
 
 
 # --- one-shot API --------------------------------------------------------------
@@ -244,13 +246,14 @@ func play(slot: String, vol_db := 0.0, pitch := 1.0) -> void:
 
 
 func _poll_tick(delta: float) -> void:
-	var mgr := get_tree().get_first_node_in_group("race_manager")
-	if mgr == null:
+	if _mgr == null or not is_instance_valid(_mgr):
+		_mgr = get_tree().get_first_node_in_group("race_manager")
+	if _mgr == null:
 		_wind.volume_db = lerpf(_wind.volume_db, FADE_DB_FLOOR, 0.05)
 		_prev_race_state = ""
 		_last_beep = -1
 		return
-	var r: Dictionary = (mgr as Node).call("get_race_state")
+	var r: Dictionary = _mgr.call("get_race_state")  # frame-stamped (Ph13 D4)
 
 	_footsteps_tick(r, delta)
 	_wind_tick(r)

@@ -39,6 +39,16 @@ var _best_trick_pts := 0
 # {name, node, gate_idx, splits, finished, time, progress}
 var _racers: Array[Dictionary] = []
 
+# Phase 13 probe surface (plan D9): exact count of full snapshot builds —
+# tools/perf_probe.gd reads it (3-4 builds/frame → 1, plan Step 2).
+var perf_snapshot_builds := 0
+
+# Phase 13 snapshot economy (plan D4): one build per process frame however
+# many listeners poll (HUD + Sfx + FX + F3 polled 3-4×/frame). Same frame
+# returns the SAME dict — listeners treat it as read-only.
+var _snap := {}
+var _snap_frame := -1
+
 
 func _ready() -> void:
 	add_to_group("race_manager")
@@ -69,6 +79,9 @@ func begin(racers: Array) -> void:
 			"time": 0.0,
 			"progress": 0.0,
 			"hits": 0,
+			# Phase 13 D3: advance-only d2f cursor (per racer). Seeded, not
+			# empty — an empty dict means "one-off caller, full scan".
+			"cursor": {"i": 0, "d": -1.0},
 		})
 	_countdown = Config.RACE_COUNTDOWN
 	if not _gates.is_empty():
@@ -100,7 +113,9 @@ func _physics_process(delta: float) -> void:
 						if _course != null:
 							rec["progress"] = (
 								_course.course_length()
-								- _course.distance_to_finish(node.global_position)
+								- _course.distance_to_finish(
+									node.global_position, rec["cursor"]
+								)
 							)
 				if all_done:
 					_clock_running = false
@@ -108,12 +123,18 @@ func _physics_process(delta: float) -> void:
 				_player_tick(delta)
 
 
+## Phase 13 cheap accessor (plan Step 2): the effects spawner needs only
+## the live speedometer feed — no snapshot build, no dict.
+func get_player_speed() -> float:
+	return _player_speed
+
+
 ## Player-only per-tick bookkeeping (HUD mirror, feel stats, wrong way).
 func _player_tick(delta: float) -> void:
 	if _racers.is_empty() or _course == null:
 		return
 	var player := _racers[0]["node"] as GoatController
-	var d := player.get_debug_state()
+	var d := player.get_motion_state()
 	_player_speed = float(d["speed"])
 	_player_grounded = bool(d["grounded"])
 	_player_surface = String(d["surface"])
@@ -124,7 +145,9 @@ func _player_tick(delta: float) -> void:
 	_update_wrong_way(delta)
 
 
-## One snapshot for the HUD, F3, and the smoke test.
+## One snapshot for the HUD, F3, and the smoke test. Frame-stamped (Phase
+## 13 D4): the first poll of a frame builds it, later polls in the same
+## frame reuse it — one frame of latency equals today's poll order.
 func get_race_state() -> Dictionary:
 	if _racers.is_empty():
 		return {
@@ -138,12 +161,22 @@ func get_race_state() -> Dictionary:
 			"ai_states": [],
 			"grounded": false, "surface": "ROCK", "alt": 0.0, "vy": 0.0,
 		}
+	var frame := Engine.get_process_frames()
+	if frame == _snap_frame:
+		return _snap
+	_snap_frame = frame
+	_snap = _build_race_state()
+	return _snap
+
+
+func _build_race_state() -> Dictionary:
+	perf_snapshot_builds += 1
 	var player: Dictionary = _racers[0]
 	var splits: Array = player["splits"]
 	var dist := 0.0
 	if _course != null:
 		dist = _course.distance_to_finish(
-			(player["node"] as GoatController).global_position
+			(player["node"] as GoatController).global_position, player["cursor"]
 		)
 	var t := _player_time if _player_time >= 0.0 else _clock
 	return {
@@ -298,6 +331,8 @@ func _player_finish() -> void:
 	if p != null:
 		p.call("add_coins", coins_collected)
 		xp_result = p.call("add_xp", xp_earned) as Dictionary
+		if p.has_method("flush_now"):
+			p.call("flush_now")  # Ph13 D7: the race's bank is on disk now
 
 	_last_progression = {
 		"coins_earned": coins_collected,

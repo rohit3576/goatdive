@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.12.0-phase12"
+const VERSION := "0.13.0-phase13"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -248,4 +248,37 @@ const WEATHER_DUST_COUNT: Dictionary = {
 const WEATHER_SNOW_BAND := 12.0  # m hysteresis around the snow line
 const STREAK_MIN_SPEED := 17.0  # m/s where air streaks fade in (85% max)
 const STREAK_MAX_PARTICLES := 70  # alive at MAX_DOWNHILL_SPEED
+
+# Phase 13 — optimization (plan: docs/plans/phase-13-optimization.md).
+# Spatial-grid query margin: record surfaces reach up to ~0.95 m past
+# their center (max obstacle r 0.6 + goat capsule 0.35), so every grid
+# query adds this slack — the candidate set stays a strict superset.
+const GRID_QUERY_MARGIN := 2.0
+# Minimap refresh ceiling (Step 6) — strategic aid, not an instrument.
+const HUD_MINIMAP_HZ := 12.0
+# Save debounce window (Step 7, D7): mutations flush at most this late;
+# finish/purchase/unlock/tree_exiting flush immediately.
+const SAVE_DEBOUNCE_S := 2.0
+
+# Quality profiles (Step 8, D6/D8): HIGH is the desktop default — terrain
+# grid and physics stay EXACTLY as Phases 5-12 built them, so the gauntlet
+# stays bit-identical. LOW is the web/mobile candidate (Phase 14 decides
+# on-device): halved terrain grid, web render floor.
+const QUALITY_HIGH := "HIGH"
+const QUALITY_LOW := "LOW"
+static var QUALITY := QUALITY_HIGH
+
+# Web render floor (Step 9, D8): compat-renderer shadow atlas 2048 (the
+# 4096 default is heavy for GLES3 web) and MSAA off — a bandwidth tax the
+# vertex-color + fog art style doesn't need. Applied at boot, A/B-able.
+const WEB_SHADOW_SIZE := 2048
+
+
+func _init() -> void:
+	# Web builds boot LOW unless Phase 14's on-device numbers say otherwise
+	# (desktop never enters this branch — gauntlet guarantee, plan D2).
+	# GOATDIVE_QUALITY=LOW forces the profile on desktop — the durable A/B
+	# knob for Phase 14 device work and the LOW-profile smoke gate.
+	if OS.has_feature("web") or OS.get_environment("GOATDIVE_QUALITY") == "LOW":
+		QUALITY = QUALITY_LOW
 

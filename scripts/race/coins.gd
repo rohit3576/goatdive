@@ -17,9 +17,10 @@ const PICKUP_R := 1.4
 var _terrain: TerrainGenerator
 var _course: CourseBuilder
 var _player: GoatController
-var _records: Array = []  # {pos, collected} — the contract (D9)
+var _records: Array = []  # {pos, collected, i} — the contract (D9) + grid id map
 var _mm: MultiMesh
 var _collected := 0
+var _grid: Node = null  # SpatialIndex (duck-typed) — Phase 13 D5, lazy
 
 
 func get_records() -> Array:
@@ -93,7 +94,9 @@ func _ready() -> void:
 	# animation v1 — F5 decides if they need juice).
 	_records = []
 	for p in placed:
-		_records.append({"pos": p, "collected": false})
+		# "i" (Phase 13): this record's index — the spatial grid returns
+		# shared record dicts, and the MultiMesh hide maps back through it.
+		_records.append({"pos": p, "collected": false, "i": _records.size()})
 	_mm = MultiMesh.new()
 	_mm.transform_format = MultiMesh.TRANSFORM_3D
 	_mm.mesh = _coin_mesh()
@@ -119,6 +122,9 @@ func _ready() -> void:
 ## Distance pickup per physics tick (D9: records, never physics queries).
 ## The player lookup is LAZY: static children ready before the level
 ## script spawns goats, so an eager lookup finds nobody.
+## Phase 13 D5: the candidate set comes from the shared XZ grid when
+## mounted (O(cell) instead of O(records)); the precise test below is
+## unchanged, so pickups are value-identical to the full scan.
 func _physics_process(_delta: float) -> void:
 	if _player == null:
 		for c in get_parent().get_children():
@@ -129,7 +135,25 @@ func _physics_process(_delta: float) -> void:
 			return
 	if _records.is_empty():
 		return
+	if _grid == null:
+		_grid = get_parent().get_node_or_null("SpatialIndex")
 	var p := _player.global_position
+	if _grid != null:
+		# Grid ids resolve to the SAME record dicts registered at build.
+		var ids: PackedInt64Array = _grid.call(
+			"query_ids", Vector2(p.x, p.z), PICKUP_R + Config.GRID_QUERY_MARGIN, 1
+		)
+		for id in ids:
+			var rec: Dictionary = _grid.call("get_record", id)
+			if rec["collected"]:
+				continue
+			var c: Vector3 = rec["pos"]
+			if Vector2(c.x - p.x, c.z - p.z).length() <= PICKUP_R and absf(c.y - p.y) < 2.0:
+				rec["collected"] = true
+				_collected += 1
+				_hide_instance(int(rec["i"]))
+				EventBus.trick_scored.emit("coin", Config.TRICK_PTS_COIN, _player)
+		return
 	for i in _records.size():
 		var rec: Dictionary = _records[i]
 		if rec["collected"]:

@@ -45,6 +45,9 @@ var _go_until := 0.0
 var _results_shown := false
 var _next_refresh := 0
 var _speed_band := -1  # 0 normal · 1 hot · 2 red (recolor only on change)
+var _coins_node: Node = null  # Phase 13 Step 6: cached sibling lookup
+var _map_next := 0  # msec — Phase 13 Step 6: minimap refresh gate
+var _map_last_gate := -1
 
 
 func _ready() -> void:
@@ -313,8 +316,9 @@ func _session_coins() -> int:
 	# total lives on the results panel and garage.
 	if _manager == null:
 		return 0
-	var coins := get_parent().get_node_or_null("Coins")
-	return int(coins.call("collected_count")) if coins != null else 0
+	if _coins_node == null:
+		_coins_node = get_parent().get_node_or_null("Coins")
+	return int(_coins_node.call("collected_count")) if _coins_node != null else 0
 
 
 func _update_countdown(r: Dictionary) -> void:
@@ -355,7 +359,16 @@ func _update_speedo(r: Dictionary) -> void:
 func _update_minimap(r: Dictionary) -> void:
 	if _map == null or _course == null:
 		return
-	_map.feed(_manager.get_racer_markers(), _course.get_gates(), int(r.gates_passed))
+	# Phase 13 Step 6: throttled to HUD_MINIMAP_HZ — the map is a strategic
+	# aid, not a per-frame instrument. A gate change feeds immediately so
+	# the NEXT highlight never lags a twelfth of a second.
+	var now := Time.get_ticks_msec()
+	var gate := int(r.gates_passed)
+	if now < _map_next and gate == _map_last_gate:
+		return
+	_map_next = now + int(1000.0 / Config.HUD_MINIMAP_HZ)
+	_map_last_gate = gate
+	_map.feed(_manager.get_racer_markers(), _course.get_gates(), gate)
 
 
 func _update_results(r: Dictionary) -> void:

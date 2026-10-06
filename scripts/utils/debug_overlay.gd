@@ -54,6 +54,14 @@ func _process(_delta: float) -> void:
 			race_line += "\nai %s  gate %s  stuck %.1f  tp %d  av %d" % [
 				ai.profile, ai.gate, ai.stuck, ai.teleports, ai.avoid,
 			]
-	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s%s" % [
-		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer, fx_line, trick_line, race_line,
+	# Phase 13 (plan Step 1): engine frame budget — FPS, process (script)
+	# and physics tick cost, straight from the Performance monitors.
+	var perf_line := "\nfps %d  proc %.2f ms  phys %.2f ms" % [
+		Engine.get_frames_per_second(),
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+	]
+	_label.text = "%s  %s  slope %.0f°  speed %.1f m/s\nvy %.1f  coyote %.2f  buffer %.2f%s%s%s%s" % [
+		d.state, d.surface, d.slope, d.speed, d.vy, d.coyote, d.buffer,
+		fx_line, trick_line, race_line, perf_line,
 	]

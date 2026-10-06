@@ -31,6 +31,11 @@ var _length := 0.0
 # Phase 8 D4 danger chords: {entry, exit, ratio, slope_main, slope_chord}.
 var chords: Array[Dictionary] = []
 
+# Phase 13 probe surface (plan D9): exact call + visited-segment counts for
+# the O(polyline) progress scan (hotspot A) — tools/perf_probe.gd reads them.
+var perf_d2f_calls := 0
+var perf_d2f_segments := 0
+
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
@@ -112,13 +117,50 @@ func get_gates() -> Array[Checkpoint]:
 
 ## D5 progress: project XZ onto the course polyline, return meters to the
 ## finish along the course (not straight-line — honest wrong-way math).
-func distance_to_finish(pos: Vector3) -> float:
+##
+## Phase 13 D3: racers move forward, so a persistent cursor Dictionary
+## {"i": segment, "d": last distance} walks a small window around the last
+## hit instead of rescanning the polyline — O(P) → O(CURSOR_BACK+FWD+1)
+## amortized. One-off callers pass no cursor and get the exact full scan
+## (value-identical by construction: same argmin over the same segments).
+## An unexplained distance jump (gate respawn, kill-plane teleport, a
+## wrong-way sprint) beyond CURSOR_JUMP_M falls back to one full rescan.
+const CURSOR_BACK := 4  # segments of backtrack window (local snake-backs)
+const CURSOR_FWD := 16  # segments of lookahead window (128 m at WALK_STEP)
+const CURSOR_JUMP_M := 8.0  # m of unexplained change → full rescan
+
+
+func distance_to_finish(pos: Vector3, cursor: Dictionary = {}) -> float:
 	if polyline.size() < 2:
 		return 0.0
+	perf_d2f_calls += 1
+	if cursor.is_empty():
+		var full := _scan_range(pos, 0, polyline.size() - 2)
+		return _dist_from(full[0], full[1])
+	var cur_i := int(cursor.get("i", 0))
+	var prev_d := float(cursor.get("d", -1.0))
+	var last: int = polyline.size() - 2
+	var best := _scan_range(
+		pos, maxi(0, cur_i - CURSOR_BACK), mini(last, cur_i + CURSOR_FWD)
+	)
+	var dist := _dist_from(best[0], best[1])
+	if prev_d >= 0.0 and absf(dist - prev_d) > CURSOR_JUMP_M:
+		best = _scan_range(pos, 0, last)
+		dist = _dist_from(best[0], best[1])
+	cursor["i"] = int(best[0])
+	cursor["d"] = dist
+	return dist
+
+
+## Nearest XZ projection over segments [from_i, to_i] (inclusive).
+## Returns [best_i, best_t] — first strictly-nearest wins, like the
+## original single loop (tie behavior preserved).
+func _scan_range(pos: Vector3, from_i: int, to_i: int) -> Array:
+	perf_d2f_segments += to_i - from_i + 1
 	var best_d2 := INF
-	var best_i := 0
+	var best_i := from_i
 	var best_t := 0.0
-	for i in polyline.size() - 1:
+	for i in range(from_i, to_i + 1):
 		var a := polyline[i]
 		var b := polyline[i + 1]
 		var ab := b - a
@@ -129,7 +171,13 @@ func distance_to_finish(pos: Vector3) -> float:
 			best_d2 = d2
 			best_i = i
 			best_t = t
-	return _length - (_cum[best_i] + (polyline[best_i + 1] - polyline[best_i]).length() * best_t)
+	return [best_i, best_t]
+
+
+func _dist_from(best_i: int, best_t: float) -> float:
+	return _length - (
+		_cum[best_i] + (polyline[best_i + 1] - polyline[best_i]).length() * best_t
+	)
 
 
 # --- walk -------------------------------------------------------------------

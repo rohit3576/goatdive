@@ -31,6 +31,7 @@ var _streak: GPUParticles3D
 var _snow_on := false
 var _snow_amt := 0.0
 var _streak_amt := 0.0
+var _mgr: Node  # RaceManager (duck-typed) — Phase 13 Step 4: cached ref
 
 # F3 / smoke observability (repo debug-state pattern).
 var _land_bursts := 0
@@ -64,11 +65,13 @@ func _process(delta: float) -> void:
 	if _dust != null:
 		_dust.global_position = cam.global_position + Vector3(0.0, 2.0, 0.0)
 	# Streaks: speed-driven ratio, CAM_FX-gated like every camera channel.
+	# Phase 13 Step 2: the cheap speed accessor — no snapshot build per frame.
 	if _streak != null:
 		var speed := 0.0
-		var mgr := get_tree().get_first_node_in_group("race_manager")
-		if mgr != null:
-			speed = float((mgr as Node).call("get_race_state").get("speed", 0.0))
+		if _mgr == null or not is_instance_valid(_mgr):
+			_mgr = get_tree().get_first_node_in_group("race_manager")
+		if _mgr != null:
+			speed = float(_mgr.call("get_player_speed"))
 		var s_target := (
 			clampf(
 				(speed - Config.STREAK_MIN_SPEED)
