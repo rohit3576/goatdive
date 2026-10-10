@@ -151,23 +151,35 @@ func _player_tick(delta: float) -> void:
 ## frame reuse it — one frame of latency equals today's poll order.
 func get_race_state() -> Dictionary:
 	if _racers.is_empty():
-		return {
-			"state": STATE_NAMES[_state], "countdown": maxf(0.0, _countdown),
-			"time": 0.0, "time_str": "0:00.00", "gates_passed": 0,
-			"gate_count": _gates.size(), "dist_to_finish": 0.0,
-			"position": 1, "racers": 0, "wrong_way": false,
-			"top_speed": 0.0, "speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
-			"best_split_str": "—", 			"finished": false, "standings": [],
-			"score": 0, "best_trick": "",
-			"ai_states": [],
-			"grounded": false, "surface": "ROCK", "alt": 0.0, "vy": 0.0,
-		}
+		return _empty_race_state()
+	# Phase 14 step 6b: the Sfx autoload polls us across the scene-teardown
+	# window of a reload/restart — this manager or the player goat is already
+	# out of the tree, and global_position would error (node_3d.cpp
+	# get_global_transform). The empty snapshot is the right answer there:
+	# audio treats it as "no race" and fades to floor.
+	var player_node := _racers[0]["node"] as GoatController
+	if not is_inside_tree() or not player_node.is_inside_tree():
+		return _empty_race_state()
 	var frame := Engine.get_process_frames()
 	if frame == _snap_frame:
 		return _snap
 	_snap_frame = frame
 	_snap = _build_race_state()
 	return _snap
+
+
+func _empty_race_state() -> Dictionary:
+	return {
+		"state": STATE_NAMES[_state], "countdown": maxf(0.0, _countdown),
+		"time": 0.0, "time_str": "0:00.00", "gates_passed": 0,
+		"gate_count": _gates.size(), "dist_to_finish": 0.0,
+		"position": 1, "racers": 0, "wrong_way": false,
+		"top_speed": 0.0, "speed": 0.0, "crashes": 0, "hits": 0, "splits": [], "best_split": 0.0,
+		"best_split_str": "—", 			"finished": false, "standings": [],
+		"score": 0, "best_trick": "",
+		"ai_states": [],
+		"grounded": false, "surface": "ROCK", "alt": 0.0, "vy": 0.0,
+	}
 
 
 func _build_race_state() -> Dictionary:

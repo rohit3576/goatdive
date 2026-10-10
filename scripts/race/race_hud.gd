@@ -253,7 +253,12 @@ func _build_pause_menu() -> void:
 	restart.pressed.connect(_restart_race)
 	var garage_btn := HudTheme.styled_button("GARAGE & UPGRADES")
 	garage_btn.pressed.connect(_open_garage_from_pause)
-	var hint := HudTheme.label("Esc — resume", 13, HudTheme.MUTED)
+	# Phase 14 step 6a: on web the mouse stays free after resume (pointer
+	# lock needs a click gesture) — say so instead of leaving it a mystery.
+	var hint_text := "Esc — resume"
+	if OS.has_feature("web"):
+		hint_text = "Esc — resume  ·  click to re-capture the mouse"
+	var hint := HudTheme.label(hint_text, 13, HudTheme.MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	box.add_child(title)
@@ -272,13 +277,22 @@ func _build_pause_menu() -> void:
 func _set_paused(on: bool) -> void:
 	get_tree().paused = on
 	_pause_layer.visible = on
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	# Phase 14 step 6a: on web, pointer lock can't be re-acquired from the
+	# Esc keydown that resumes play (Chrome: gesture required, plus a
+	# cooldown right after an exit). Leave the mouse free — WASD works and
+	# the next in-canvas click recaptures (head_camera click-to-capture).
+	# Desktop keeps the instant recapture.
+	if on:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif not OS.has_feature("web"):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	print("UI: pause %s" % ["on" if on else "off"])
 
 
 func _restart_race() -> void:
 	get_tree().paused = false  # paused-reload trap (plan risk table)
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not OS.has_feature("web"):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	get_tree().reload_current_scene()
 
 

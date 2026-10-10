@@ -51,9 +51,11 @@ func _sync_current_mountain_index() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_G:
+		# Phase 14 step 6c: physical keycodes — layout-independent (matches
+		# the input map; G on AZERTY stays where G lives).
+		if event.physical_keycode == KEY_G:
 			toggle_garage()
-		elif event.keycode == KEY_ESCAPE and visible:
+		elif event.physical_keycode == KEY_ESCAPE and visible:
 			close_garage()
 
 
@@ -74,7 +76,12 @@ func open_garage() -> void:
 
 func close_garage() -> void:
 	visible = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Phase 14 step 6a: on web, pointer lock can't be requested from a
+	# G-key keydown (Chrome needs a click gesture). Leave the mouse free;
+	# head_camera's click-to-capture recovers it on the next in-canvas
+	# click. Desktop keeps the instant recapture.
+	if not OS.has_feature("web"):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	print("UI: garage close")
 
 

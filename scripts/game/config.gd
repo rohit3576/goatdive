@@ -1,7 +1,7 @@
 extends Node
 ## Immutable game tunables. One source of truth.
 
-const VERSION := "0.13.0-phase13"
+const VERSION := "0.14.0-phase14"
 const DEBUG := true
 
 # Gravity / movement (numbers are first guesses — F5 + overlay tunes them).
@@ -273,12 +273,27 @@ static var QUALITY := QUALITY_HIGH
 # vertex-color + fog art style doesn't need. Applied at boot, A/B-able.
 const WEB_SHADOW_SIZE := 2048
 
+# Phase 14 — web build. No new numeric knobs survived step 6: the quality
+# lever is the ?quality=high URL param (read in _init, plan D3) and the
+# pointer-lock policy is a hard web gate (recapture only on in-canvas
+# click — Chrome denies lock from keydown handlers; race_hud/garage).
+# Measurement outcome (Chrome desktop, M-series): LOW and HIGH both
+# vsync-locked 60/60/60 ×3 — grid_low stays 128 on every mountain
+# (plan D8, data-driven no-op), HIGH frozen untouched.
+
 
 func _init() -> void:
 	# Web builds boot LOW unless Phase 14's on-device numbers say otherwise
 	# (desktop never enters this branch — gauntlet guarantee, plan D2).
 	# GOATDIVE_QUALITY=LOW forces the profile on desktop — the durable A/B
 	# knob for Phase 14 device work and the LOW-profile smoke gate.
-	if OS.has_feature("web") or OS.get_environment("GOATDIVE_QUALITY") == "LOW":
+	# On web, ?quality=high is the A/B lever (Phase 14 D3) — one bookmark,
+	# no env vars in a browser.
+	if OS.has_feature("web"):
+		var q := String(JavaScriptBridge.eval(
+			"new URLSearchParams(location.search).get('quality') || ''"
+		))
+		QUALITY = QUALITY_HIGH if q == "high" else QUALITY_LOW
+	elif OS.get_environment("GOATDIVE_QUALITY") == "LOW":
 		QUALITY = QUALITY_LOW
 
