@@ -101,6 +101,7 @@ func _physics_process(delta: float) -> void:
 					gate.set_armed(true)  # order is manager-side now (D2 note)
 				for rec in _racers:
 					(rec["node"] as GoatController).set_input_enabled(true)
+				print("RACE: GO — %d racers, clock started" % _racers.size())
 				EventBus.race_started.emit()
 		_:
 			if _clock_running:

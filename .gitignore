@@ -2,7 +2,12 @@
 .godot/
 *.translation
 export_credentials.cfg
-export_presets.cfg
+
+# Web build output (tools/build_web.sh)
+build/
+
+# Browser QA artifacts (playwright)
+.playwright-mcp/
 
 # OS
 .DS_Store

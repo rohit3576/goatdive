@@ -273,6 +273,7 @@ func _set_paused(on: bool) -> void:
 	get_tree().paused = on
 	_pause_layer.visible = on
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	print("UI: pause %s" % ["on" if on else "off"])
 
 
 func _restart_race() -> void:

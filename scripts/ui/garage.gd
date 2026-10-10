@@ -69,11 +69,13 @@ func open_garage() -> void:
 	_refresh_all()
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	print("UI: garage open")
 
 
 func close_garage() -> void:
 	visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	print("UI: garage close")
 
 
 # --- UI Construction ---------------------------------------------------------
